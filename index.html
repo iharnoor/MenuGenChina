@@ -119,6 +119,117 @@
             color: #666;
         }
 
+        .menu-items {
+            margin-top: 20px;
+        }
+
+        .menu-item-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: all 0.3s;
+        }
+
+        .menu-item-card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .menu-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .menu-item-name {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .menu-item-chinese {
+            font-size: 1rem;
+            color: #667eea;
+            margin-left: 10px;
+        }
+
+        .menu-item-pinyin {
+            font-size: 0.9rem;
+            color: #999;
+            font-style: italic;
+            margin-left: 5px;
+        }
+
+        .menu-item-price {
+            font-size: 1.1rem;
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .menu-item-details {
+            margin-top: 15px;
+        }
+
+        .detail-section {
+            margin-bottom: 10px;
+        }
+
+        .detail-label {
+            font-weight: bold;
+            color: #555;
+            display: inline-block;
+            min-width: 150px;
+        }
+
+        .detail-value {
+            color: #666;
+        }
+
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 5px;
+        }
+
+        .tag {
+            background: #f0f0f0;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            color: #555;
+        }
+
+        .tag.vegetarian { background: #c8e6c9; color: #2e7d32; }
+        .tag.vegan { background: #b2dfdb; color: #00695c; }
+        .tag.halal { background: #fff9c4; color: #f57f17; }
+        .tag.gluten-free { background: #ffccbc; color: #d84315; }
+
+        .spiciness {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .spice-icon {
+            color: #e74c3c;
+            font-size: 1.2rem;
+        }
+
+        .cultural-details {
+            background: #f8f9ff;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 3px solid #667eea;
+            margin-top: 10px;
+            font-style: italic;
+            line-height: 1.6;
+        }
+
         .loading {
             display: none;
             text-align: center;
@@ -210,6 +321,11 @@
                 <h3>🌍 Translated Text</h3>
                 <p id="translatedText"></p>
             </div>
+
+            <div class="menu-items" id="menuItems" style="display: none;">
+                <h3>🍽️ Menu Items Details</h3>
+                <div id="menuItemsContainer"></div>
+            </div>
         </div>
     </div>
 
@@ -257,13 +373,242 @@
                 return;
             }
 
+            // Show initial loading state
+            loading.style.display = 'block';
+            loadingText.textContent = 'Preparing image...';
+            progress.style.display = 'block';
+            progressBar.style.width = '10%';
+
             const reader = new FileReader();
             reader.onload = (e) => {
                 imagePreview.src = e.target.result;
                 imagePreview.style.display = 'block';
-                processImage(e.target.result);
+
+                // Compress image before processing
+                loadingText.textContent = 'Compressing image for faster processing...';
+                progressBar.style.width = '15%';
+
+                compressImage(e.target.result, (compressed) => {
+                    processImage(compressed);
+                });
             };
             reader.readAsDataURL(file);
+        }
+
+        function compressImage(dataUrl, callback) {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+
+                // Resize to max 800px width while maintaining aspect ratio
+                let width = img.width;
+                let height = img.height;
+                const maxWidth = 800;
+
+                if (width > maxWidth) {
+                    height = (height * maxWidth) / width;
+                    width = maxWidth;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Convert to JPEG with 70% quality for faster upload and processing
+                const compressed = canvas.toDataURL('image/jpeg', 0.70);
+                callback(compressed);
+            };
+            img.src = dataUrl;
+        }
+
+        async function fetchAllDishDetails(items) {
+            try {
+                const response = await fetch('http://localhost:8081/batch-dish-details', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        dishes: items.map(item => ({
+                            chinese_name: item.chinese,
+                            english_name: item.english,
+                            pinyin: item.pinyin
+                        }))
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    // Update each card with its corresponding details
+                    result.details.forEach((details, index) => {
+                        updateCardWithDetails(index, details);
+                    });
+                }
+            } catch (error) {
+                console.error('Error fetching batch dish details:', error);
+            }
+        }
+
+        async function fetchDishDetails(item, index) {
+            try {
+                const response = await fetch('http://localhost:8081/dish-details', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        chinese_name: item.chinese,
+                        english_name: item.english,
+                        pinyin: item.pinyin
+                    })
+                });
+
+                if (response.ok) {
+                    const details = await response.json();
+                    updateCardWithDetails(index, details);
+                }
+            } catch (error) {
+                console.error(`Error fetching details for ${item.english}:`, error);
+            }
+        }
+
+        function updateCardWithDetails(index, details) {
+            const card = document.querySelector(`[data-dish-index="${index}"]`);
+            if (!card) return;
+
+            const detailsContainer = card.querySelector('.menu-item-details');
+            if (!detailsContainer) return;
+
+            // Update with detailed information
+            detailsContainer.innerHTML = '';
+
+            // Regional origin
+            if (details.regional_origin) {
+                detailsContainer.innerHTML += `
+                    <div class="detail-section">
+                        <span class="detail-label">📍 Origin:</span>
+                        <span class="detail-value">${details.regional_origin}</span>
+                    </div>
+                `;
+            }
+
+            // Spiciness level
+            if (details.spiciness_level) {
+                const spiceLevel = details.spiciness_level.toLowerCase();
+                let spiceIcons = '';
+                if (spiceLevel.includes('very hot')) spiceIcons = '🌶️🌶️🌶️🌶️';
+                else if (spiceLevel.includes('hot')) spiceIcons = '🌶️🌶️🌶️';
+                else if (spiceLevel.includes('medium')) spiceIcons = '🌶️🌶️';
+                else if (spiceLevel.includes('mild')) spiceIcons = '🌶️';
+                else spiceIcons = '😊 Not spicy';
+
+                detailsContainer.innerHTML += `
+                    <div class="detail-section">
+                        <span class="detail-label">🌶️ Spiciness:</span>
+                        <span class="detail-value spiciness">${spiceIcons}</span>
+                    </div>
+                `;
+            }
+
+            // Ingredients
+            if (details.ingredients && details.ingredients.length > 0) {
+                detailsContainer.innerHTML += `
+                    <div class="detail-section">
+                        <span class="detail-label">🥘 Ingredients:</span>
+                        <div class="tags">
+                            ${details.ingredients.map(ing => `<span class="tag">${ing}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Dietary information
+            if (details.dietary_info && details.dietary_info.length > 0) {
+                detailsContainer.innerHTML += `
+                    <div class="detail-section">
+                        <span class="detail-label">🥗 Dietary Info:</span>
+                        <div class="tags">
+                            ${details.dietary_info.map(diet => {
+                                const className = diet.toLowerCase().replace(/[^a-z]/g, '-');
+                                return `<span class="tag ${className}">${diet}</span>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Recommended pairings
+            if (details.recommended_pairings && details.recommended_pairings.length > 0) {
+                detailsContainer.innerHTML += `
+                    <div class="detail-section">
+                        <span class="detail-label">🍚 Pairs well with:</span>
+                        <span class="detail-value">${details.recommended_pairings.join(', ')}</span>
+                    </div>
+                `;
+            }
+
+            // Nutritional info
+            if (details.nutritional_info) {
+                detailsContainer.innerHTML += `
+                    <div class="detail-section">
+                        <span class="detail-label">💪 Nutrition:</span>
+                        <span class="detail-value">${details.nutritional_info}</span>
+                    </div>
+                `;
+            }
+
+            // Cultural details
+            const existingCultural = card.querySelector('.cultural-details');
+            if (existingCultural) {
+                existingCultural.remove();
+            }
+
+            if (details.cultural_details) {
+                const cultural = document.createElement('div');
+                cultural.className = 'cultural-details';
+                cultural.innerHTML = `<strong>📖 Cultural Background:</strong><br>${details.cultural_details}`;
+                card.appendChild(cultural);
+            }
+
+            // Remove loading indicator
+            const loadingIndicator = card.querySelector('.loading-details');
+            if (loadingIndicator) {
+                loadingIndicator.remove();
+            }
+        }
+
+        function createMenuItemCard(item, index) {
+            const card = document.createElement('div');
+            card.className = 'menu-item-card';
+            card.setAttribute('data-dish-index', index);
+
+            // Header with name and price
+            const header = document.createElement('div');
+            header.className = 'menu-item-header';
+            header.innerHTML = `
+                <div>
+                    <span class="menu-item-name">${item.english}</span>
+                    <span class="menu-item-chinese">${item.chinese}</span>
+                    ${item.pinyin ? `<span class="menu-item-pinyin">(${item.pinyin})</span>` : ''}
+                </div>
+                ${item.price ? `<span class="menu-item-price">${item.price}</span>` : ''}
+            `;
+            card.appendChild(header);
+
+            // Details section with loading indicator
+            const details = document.createElement('div');
+            details.className = 'menu-item-details';
+
+            const loadingIndicator = document.createElement('div');
+            loadingIndicator.className = 'loading-details';
+            loadingIndicator.innerHTML = '<span style="color: #999; font-style: italic;">⏳ Loading detailed information...</span>';
+            details.appendChild(loadingIndicator);
+
+            card.appendChild(details);
+
+            return card;
         }
 
         async function processImage(imageSrc) {
@@ -273,8 +618,8 @@
 
             try {
                 // OCR Processing via Backend API
-                loadingText.textContent = 'Extracting text from image...';
-                progressBar.style.width = '30%';
+                loadingText.textContent = 'Extracting text from menu... (this may take 10-20 seconds)';
+                progressBar.style.width = '20%';
 
                 const ocrResponse = await fetch('http://localhost:8081/ocr', {
                     method: 'POST',
@@ -300,9 +645,40 @@
                     throw new Error('No text found in image');
                 }
 
+                loadingText.textContent = 'Parsing menu items...';
+                progressBar.style.width = '50%';
+
                 extractedText.textContent = originalText.trim();
                 translatedText.textContent = translatedTextFromAPI.trim();
 
+                // Display menu items if available
+                const menuItemsSection = document.getElementById('menuItems');
+                const menuItemsContainer = document.getElementById('menuItemsContainer');
+
+                if (ocrResult.menu_items && ocrResult.menu_items.length > 0) {
+                    menuItemsContainer.innerHTML = '';
+
+                    // Show basic cards immediately
+                    ocrResult.menu_items.forEach((item, index) => {
+                        const card = createMenuItemCard(item, index);
+                        menuItemsContainer.appendChild(card);
+                    });
+                    menuItemsSection.style.display = 'block';
+
+                    // Fetch details for all dishes in ONE batch call
+                    loadingText.textContent = `Loading detailed information for ${ocrResult.menu_items.length} dishes... (this may take 20-30 seconds)`;
+                    progressBar.style.width = '70%';
+                    fetchAllDishDetails(ocrResult.menu_items).then(() => {
+                        loadingText.textContent = 'All details loaded!';
+                    }).catch(error => {
+                        console.error('Error loading dish details:', error);
+                        loadingText.textContent = 'Some details failed to load, but menu is ready!';
+                    });
+                } else {
+                    menuItemsSection.style.display = 'none';
+                }
+
+                loadingText.textContent = 'Complete! Displaying results...';
                 progressBar.style.width = '100%';
 
                 setTimeout(() => {

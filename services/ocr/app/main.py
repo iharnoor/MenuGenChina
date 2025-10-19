@@ -12,6 +12,14 @@ class TranslateRequest(BaseModel):
     text: str
     target: str
 
+class DishDetailsRequest(BaseModel):
+    chinese_name: str
+    english_name: str
+    pinyin: Optional[str] = None
+
+class BatchDishDetailsRequest(BaseModel):
+    dishes: List[DishDetailsRequest]
+
 class OcrRequest(BaseModel):
     image_url: Optional[str] = None
     image: Optional[str] = None  # base64 encoded image
@@ -19,8 +27,16 @@ class OcrRequest(BaseModel):
 
 class MenuItem(BaseModel):
     chinese: str
+    pinyin: Optional[str] = None  # Pinyin pronunciation
     english: str
     price: Optional[str] = None
+    cultural_details: Optional[str] = None
+    ingredients: Optional[List[str]] = None
+    spiciness_level: Optional[str] = None  # "mild", "medium", "hot", "very hot"
+    dietary_info: Optional[List[str]] = None  # ["vegetarian", "vegan", "halal", "gluten-free", etc.]
+    regional_origin: Optional[str] = None
+    recommended_pairings: Optional[List[str]] = None
+    nutritional_info: Optional[str] = None
 
 class OcrResponse(BaseModel):
     original_text: str
@@ -92,19 +108,28 @@ async def ocr_endpoint(payload: OcrRequest):
 
         prompt = f"""Extract all text from this Chinese menu image and translate it to {payload.target_lang or 'English'}.
 
+This is a QUICK extraction - just get the basic information for speed.
+
 Return ONLY a JSON object with this exact structure (no markdown formatting):
 {{
   "original_text": "all the Chinese text you found, separated by newlines",
   "translated_text": "the English translation, preserving the structure",
   "menu_items": [
-    {{"chinese": "dish name in Chinese", "english": "dish name in English", "price": "price if found"}}
+    {{
+      "chinese": "dish name in Chinese",
+      "pinyin": "pinyin pronunciation with tone marks (e.g., Gōngbǎo Jīdīng)",
+      "english": "dish name in English",
+      "price": "price if found"
+    }}
   ]
 }}
 
 Make sure to:
-1. Extract ALL visible text from the menu
+1. Extract ALL visible text from the menu quickly
 2. Preserve the structure (sections, items, prices)
-3. Return valid JSON only (no markdown code blocks)"""
+3. Provide accurate pinyin pronunciation with tone marks for each dish name
+4. Return valid JSON only (no markdown code blocks)
+5. BE FAST - only basic info needed now, details will be fetched separately"""
 
         payload_data = {
             "contents": [{
@@ -159,6 +184,150 @@ Make sure to:
         print(f"JSON Parse Error: {e}")
         print(f"Response was: {result_text}")
         raise HTTPException(status_code=500, detail=f"Failed to parse Gemini response: {str(e)}")
+    except Exception as e:
+        print(f"Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/batch-dish-details")
+async def batch_dish_details_endpoint(payload: BatchDishDetailsRequest):
+    """Get detailed information for multiple dishes in one call"""
+    try:
+        api_key = load_gemini_api_key()
+        if not api_key:
+            raise HTTPException(status_code=500, detail="Gemini API key not configured")
+
+        gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+
+        # Build list of dishes
+        dishes_list = "\n".join([
+            f"{i+1}. {dish.chinese_name} ({dish.pinyin if dish.pinyin else ''}) - {dish.english_name}"
+            for i, dish in enumerate(payload.dishes)
+        ])
+
+        prompt = f"""Provide comprehensive details for these {len(payload.dishes)} Chinese dishes. Be concise.
+
+Dishes:
+{dishes_list}
+
+Return ONLY a JSON array with this exact structure (no markdown):
+[
+  {{
+    "cultural_details": "brief background (1-2 sentences)",
+    "ingredients": ["main", "ingredients"],
+    "spiciness_level": "none/mild/medium/hot/very hot",
+    "dietary_info": ["vegetarian", "vegan", "halal", "gluten-free", etc.],
+    "regional_origin": "province/region",
+    "recommended_pairings": ["pairings"],
+    "nutritional_info": "brief overview"
+  }}
+]
+
+Return valid JSON array with {len(payload.dishes)} objects in the same order. No markdown."""
+
+        payload_data = {
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }]
+        }
+
+        import requests
+        response = requests.post(
+            f"{gemini_url}?key={api_key}",
+            headers={"Content-Type": "application/json"},
+            json=payload_data
+        )
+        response.raise_for_status()
+        gemini_result = response.json()
+
+        if 'candidates' in gemini_result and len(gemini_result['candidates']) > 0:
+            candidate = gemini_result['candidates'][0]
+            if 'content' in candidate and 'parts' in candidate['content']:
+                result_text = candidate['content']['parts'][0]['text'].strip()
+            else:
+                raise HTTPException(status_code=500, detail="Unexpected Gemini response format")
+        else:
+            raise HTTPException(status_code=500, detail="No response from Gemini")
+
+        # Remove markdown code blocks if present
+        if result_text.startswith('```'):
+            result_text = result_text.split('\n', 1)[1]
+            result_text = result_text.rsplit('\n```', 1)[0]
+            result_text = result_text.strip()
+
+        result_json = json.loads(result_text)
+        return {"details": result_json}
+
+    except json.JSONDecodeError as e:
+        print(f"JSON Parse Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to parse response: {str(e)}")
+    except Exception as e:
+        print(f"Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/dish-details")
+async def dish_details_endpoint(payload: DishDetailsRequest):
+    """Get detailed information about a specific dish"""
+    try:
+        api_key = load_gemini_api_key()
+        if not api_key:
+            raise HTTPException(status_code=500, detail="Gemini API key not configured")
+
+        gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+
+        prompt = f"""Provide comprehensive details about this Chinese dish:
+Chinese name: {payload.chinese_name}
+English name: {payload.english_name}
+{f'Pinyin: {payload.pinyin}' if payload.pinyin else ''}
+
+Return ONLY a JSON object with this exact structure (no markdown formatting):
+{{
+  "cultural_details": "brief cultural/historical background of this dish (2-3 sentences)",
+  "ingredients": ["ingredient1", "ingredient2", "ingredient3"],
+  "spiciness_level": "none/mild/medium/hot/very hot",
+  "dietary_info": ["vegetarian", "vegan", "halal", "gluten-free", "dairy-free", "contains nuts", etc.],
+  "regional_origin": "region/province in China where this dish originated",
+  "recommended_pairings": ["rice", "noodles", "soup", "tea", etc.],
+  "nutritional_info": "brief overview (e.g., high protein, low fat, etc.)"
+}}
+
+Be accurate and concise. Return valid JSON only (no markdown code blocks)."""
+
+        payload_data = {
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }]
+        }
+
+        import requests
+        response = requests.post(
+            f"{gemini_url}?key={api_key}",
+            headers={"Content-Type": "application/json"},
+            json=payload_data
+        )
+        response.raise_for_status()
+        gemini_result = response.json()
+
+        if 'candidates' in gemini_result and len(gemini_result['candidates']) > 0:
+            candidate = gemini_result['candidates'][0]
+            if 'content' in candidate and 'parts' in candidate['content']:
+                result_text = candidate['content']['parts'][0]['text'].strip()
+            else:
+                raise HTTPException(status_code=500, detail="Unexpected Gemini response format")
+        else:
+            raise HTTPException(status_code=500, detail="No response from Gemini")
+
+        # Remove markdown code blocks if present
+        if result_text.startswith('```'):
+            result_text = result_text.split('\n', 1)[1]
+            result_text = result_text.rsplit('\n```', 1)[0]
+            result_text = result_text.strip()
+
+        result_json = json.loads(result_text)
+        return result_json
+
+    except json.JSONDecodeError as e:
+        print(f"JSON Parse Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to parse response: {str(e)}")
     except Exception as e:
         print(f"Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
