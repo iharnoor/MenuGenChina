@@ -400,10 +400,10 @@
             img.onload = () => {
                 const canvas = document.createElement('canvas');
 
-                // Resize to max 800px width while maintaining aspect ratio
+                // Resize to max 600px width while maintaining aspect ratio (optimized for serverless)
                 let width = img.width;
                 let height = img.height;
-                const maxWidth = 800;
+                const maxWidth = 600;
 
                 if (width > maxWidth) {
                     height = (height * maxWidth) / width;
@@ -423,54 +423,49 @@
             img.src = dataUrl;
         }
 
-        async function fetchAllDishDetails(items) {
-            try {
-                const response = await fetch('http://localhost:8081/batch-dish-details', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        dishes: items.map(item => ({
-                            chinese_name: item.chinese,
-                            english_name: item.english,
-                            pinyin: item.pinyin
-                        }))
-                    })
-                });
-
-                if (response.ok) {
-                    const result = await response.json();
-                    // Update each card with its corresponding details
-                    result.details.forEach((details, index) => {
-                        updateCardWithDetails(index, details);
-                    });
-                }
-            } catch (error) {
-                console.error('Error fetching batch dish details:', error);
-            }
-        }
 
         async function fetchDishDetails(item, index) {
             try {
-                const response = await fetch('http://localhost:8081/dish-details', {
+                // Update button to show loading state
+                const card = document.querySelector(`[data-dish-index="${index}"]`);
+                const detailsBtn = card.querySelector('.details-btn');
+                if (detailsBtn) {
+                    detailsBtn.textContent = '⏳ Loading...';
+                    detailsBtn.disabled = true;
+                }
+
+                const response = await fetch('/api/dish-details', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
                         chinese_name: item.chinese,
-                        english_name: item.english,
-                        pinyin: item.pinyin
+                        english_name: item.english
                     })
                 });
 
                 if (response.ok) {
                     const details = await response.json();
                     updateCardWithDetails(index, details);
+
+                    // Hide the button after loading
+                    if (detailsBtn) {
+                        detailsBtn.style.display = 'none';
+                    }
+                } else {
+                    throw new Error('Failed to fetch details');
                 }
             } catch (error) {
                 console.error(`Error fetching details for ${item.english}:`, error);
+
+                // Show error state
+                const card = document.querySelector(`[data-dish-index="${index}"]`);
+                const detailsBtn = card.querySelector('.details-btn');
+                if (detailsBtn) {
+                    detailsBtn.textContent = '❌ Failed - Try Again';
+                    detailsBtn.disabled = false;
+                }
             }
         }
 
@@ -572,11 +567,6 @@
                 card.appendChild(cultural);
             }
 
-            // Remove loading indicator
-            const loadingIndicator = card.querySelector('.loading-details');
-            if (loadingIndicator) {
-                loadingIndicator.remove();
-            }
         }
 
         function createMenuItemCard(item, index) {
@@ -597,14 +587,16 @@
             `;
             card.appendChild(header);
 
-            // Details section with loading indicator
+            // Details section with "Show Details" button
             const details = document.createElement('div');
             details.className = 'menu-item-details';
 
-            const loadingIndicator = document.createElement('div');
-            loadingIndicator.className = 'loading-details';
-            loadingIndicator.innerHTML = '<span style="color: #999; font-style: italic;">⏳ Loading detailed information...</span>';
-            details.appendChild(loadingIndicator);
+            const detailsBtn = document.createElement('button');
+            detailsBtn.className = 'details-btn upload-btn';
+            detailsBtn.style.marginTop = '10px';
+            detailsBtn.textContent = '🔍 Show Details';
+            detailsBtn.onclick = () => fetchDishDetails(item, index);
+            details.appendChild(detailsBtn);
 
             card.appendChild(details);
 
@@ -617,11 +609,11 @@
             results.style.display = 'none';
 
             try {
-                // OCR Processing via Backend API
-                loadingText.textContent = 'Extracting text from menu... (this may take 10-20 seconds)';
+                // OCR Processing via Serverless API
+                loadingText.textContent = 'Extracting text from menu... (this may take 7-10 seconds)';
                 progressBar.style.width = '20%';
 
-                const ocrResponse = await fetch('http://localhost:8081/ocr', {
+                const ocrResponse = await fetch('/api/ocr', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -658,22 +650,12 @@
                 if (ocrResult.menu_items && ocrResult.menu_items.length > 0) {
                     menuItemsContainer.innerHTML = '';
 
-                    // Show basic cards immediately
+                    // Show basic cards immediately with "Show Details" buttons
                     ocrResult.menu_items.forEach((item, index) => {
                         const card = createMenuItemCard(item, index);
                         menuItemsContainer.appendChild(card);
                     });
                     menuItemsSection.style.display = 'block';
-
-                    // Fetch details for all dishes in ONE batch call
-                    loadingText.textContent = `Loading detailed information for ${ocrResult.menu_items.length} dishes... (this may take 20-30 seconds)`;
-                    progressBar.style.width = '70%';
-                    fetchAllDishDetails(ocrResult.menu_items).then(() => {
-                        loadingText.textContent = 'All details loaded!';
-                    }).catch(error => {
-                        console.error('Error loading dish details:', error);
-                        loadingText.textContent = 'Some details failed to load, but menu is ready!';
-                    });
                 } else {
                     menuItemsSection.style.display = 'none';
                 }
