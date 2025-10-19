@@ -75,8 +75,20 @@ async def ocr_endpoint(payload: OcrRequest):
         else:
             raise HTTPException(status_code=400, detail="Either image or image_url must be provided")
 
-        # Use Gemini to extract and translate in one call
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Use Gemini REST API directly with base64
+        api_key = load_gemini_api_key()
+        if not api_key:
+            raise HTTPException(status_code=500, detail="Gemini API key not configured")
+
+        # Convert image to base64
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+
+        # Prepare Gemini API request
+        gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+
+        headers = {
+            "Content-Type": "application/json",
+        }
 
         prompt = f"""Extract all text from this Chinese menu image and translate it to {payload.target_lang or 'English'}.
 
@@ -94,15 +106,39 @@ Make sure to:
 2. Preserve the structure (sections, items, prices)
 3. Return valid JSON only (no markdown code blocks)"""
 
-        # Send image to Gemini
-        import PIL.Image
-        import io
-        image = PIL.Image.open(io.BytesIO(image_bytes))
+        payload_data = {
+            "contents": [{
+                "parts": [
+                    {"text": prompt},
+                    {
+                        "inline_data": {
+                            "mime_type": "image/jpeg",
+                            "data": image_base64
+                        }
+                    }
+                ]
+            }]
+        }
 
-        response = model.generate_content([prompt, image])
+        # Make API request
+        import requests
+        response = requests.post(
+            f"{gemini_url}?key={api_key}",
+            headers=headers,
+            json=payload_data
+        )
+        response.raise_for_status()
+        gemini_result = response.json()
 
         # Parse Gemini's response
-        result_text = response.text.strip()
+        if 'candidates' in gemini_result and len(gemini_result['candidates']) > 0:
+            candidate = gemini_result['candidates'][0]
+            if 'content' in candidate and 'parts' in candidate['content']:
+                result_text = candidate['content']['parts'][0]['text'].strip()
+            else:
+                raise HTTPException(status_code=500, detail="Unexpected Gemini response format")
+        else:
+            raise HTTPException(status_code=500, detail="No response from Gemini")
 
         # Remove markdown code blocks if present
         if result_text.startswith('```'):
