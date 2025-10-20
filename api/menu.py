@@ -307,82 +307,8 @@ Provide ALL requested information for dishes {start_dish}-{end_dish} ONLY. Retur
                 top_2 = result_json.get('top_2_healthiest', [])
                 print(f"  ✓ Health analysis complete! Selected top 2 healthiest dishes", file=sys.stderr, flush=True)
 
-                # Generate images for top 2 dishes using Gemini 2.5 Flash Image (Nano Banana)
-                print(f"  🎨 Generating images for top 2 healthiest dishes...", file=sys.stderr, flush=True)
-
-                # Load the black image (nanobanana.png) to use as input
-                black_image_path = Path(__file__).parent.parent / "nanobanana.png"
-                if not black_image_path.exists():
-                    # Fallback: try current directory
-                    black_image_path = Path(__file__).parent / "nanobanana.png"
-
-                black_image_base64 = None
-                if black_image_path.exists():
-                    with open(black_image_path, 'rb') as f:
-                        black_image_bytes = f.read()
-                        black_image_base64 = base64.b64encode(black_image_bytes).decode('utf-8')
-                    print(f"  ✓ Loaded black image from {black_image_path}", file=sys.stderr, flush=True)
-                else:
-                    print(f"  ⚠️  Black image not found at {black_image_path}", file=sys.stderr, flush=True)
-
-                for i, dish_rec in enumerate(top_2):
-                    try:
-                        dish_name = dish_rec.get('dish_name', '')
-                        # Create realistic food photography prompt
-                        image_prompt = f"Create a professional food photography of {dish_name}, beautifully plated on a white ceramic plate, natural lighting, restaurant quality, appetizing presentation, 4k quality, sharp focus"
-
-                        print(f"  📸 Generating image {i+1}: {dish_name}", file=sys.stderr, flush=True)
-
-                        # Call Gemini 2.5 Flash Image model with black image as input
-                        # This allows text-to-image generation by "transforming" the black image
-                        parts = [{"text": image_prompt}]
-
-                        if black_image_base64:
-                            # Add the black image as input (the trick to enable text-to-image!)
-                            parts.append({
-                                "inline_data": {
-                                    "mime_type": "image/png",
-                                    "data": black_image_base64
-                                }
-                            })
-
-                        image_payload = {
-                            "contents": [{
-                                "parts": parts
-                            }],
-                            "generationConfig": {
-                                "response_modalities": ["IMAGE"],
-                                "image_config": {
-                                    "aspect_ratio": "16:9"
-                                }
-                            }
-                        }
-
-                        image_response = requests.post(
-                            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key={api_key}",
-                            headers={"Content-Type": "application/json"},
-                            json=image_payload,
-                            timeout=30
-                        )
-
-                        if image_response.status_code == 200:
-                            image_result = image_response.json()
-                            # Extract base64 image data
-                            if 'candidates' in image_result and len(image_result['candidates']) > 0:
-                                candidate = image_result['candidates'][0]
-                                if 'content' in candidate and 'parts' in candidate['content']:
-                                    for part in candidate['content']['parts']:
-                                        if 'inline_data' in part:
-                                            # Add base64 image to dish recommendation
-                                            dish_rec['generated_image'] = f"data:image/png;base64,{part['inline_data']['data']}"
-                                            print(f"  ✓ Image {i+1} generated successfully", file=sys.stderr, flush=True)
-                                            break
-                        else:
-                            print(f"  ⚠️  Image generation failed for dish {i+1}: HTTP {image_response.status_code}", file=sys.stderr, flush=True)
-
-                    except Exception as img_error:
-                        print(f"  ⚠️  Error generating image {i+1}: {str(img_error)}", file=sys.stderr, flush=True)
-                        # Continue without image if generation fails
+                # Note: Image generation temporarily disabled (Nano Banana requires proper image editing use case)
+                # TODO: Add text-to-image generation with FLUX.1 or Stable Diffusion in future
 
                 response_data = {
                     'top_2_healthiest': top_2
