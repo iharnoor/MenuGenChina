@@ -51,12 +51,18 @@ class handler(BaseHTTPRequestHandler):
 
             print(f"  ✓ API key loaded (length: {len(api_key)} chars)", file=sys.stderr, flush=True)
 
-            # Get batch number for progressive loading (default to batch 1)
-            batch_number = payload.get('batch_number', 1)
-            dishes_per_batch = 2
-            start_dish = (batch_number - 1) * dishes_per_batch + 1
-            end_dish = start_dish + dishes_per_batch - 1
-            print(f"  📦 Processing batch {batch_number} (dishes {start_dish}-{end_dish})...", file=sys.stderr, flush=True)
+            # Check if this is a count-only request
+            count_only = payload.get('count_only', False)
+
+            if count_only:
+                print(f"  🔢 Count-only mode: determining total number of dishes...", file=sys.stderr, flush=True)
+            else:
+                # Get batch number for progressive loading (default to batch 1)
+                batch_number = payload.get('batch_number', 1)
+                dishes_per_batch = 2
+                start_dish = (batch_number - 1) * dishes_per_batch + 1
+                end_dish = start_dish + dishes_per_batch - 1
+                print(f"  📦 Processing batch {batch_number} (dishes {start_dish}-{end_dish})...", file=sys.stderr, flush=True)
 
             # Get image data
             print(f"  🖼️  Decoding image data...", file=sys.stderr, flush=True)
@@ -85,25 +91,61 @@ class handler(BaseHTTPRequestHandler):
 
             print(f"  🌍 Source language: {source_lang_name} ({source_lang})", file=sys.stderr, flush=True)
 
-            # Load system prompt from SystemPrompt.txt
-            system_prompt = load_system_prompt()
+            # Load system prompt from SystemPrompt.txt (skip for count-only)
+            if count_only:
+                # Simplified count-only prompt
+                prompt = f"""Analyze this {source_lang_name} menu image and count ONLY the actual menu items (dishes).
 
-            # Create batch-specific prompt
-            batch_instruction = f"""CRITICAL INSTRUCTIONS - READ CAREFULLY:
+CRITICAL: What counts as a menu item:
+✅ Dishes with names (and usually prices)
+✅ Actual food items you can order
 
-1. Count ONLY the actual dishes visible on this menu image
+❌ DO NOT count:
+- Labels like [super deal], [for 2 people], [recommended]
+- Section headers (e.g., "Appetizers", "Main Courses")
+- Promotional text or descriptions
+- Serving size indicators
+- Spiciness indicators or icons
+
+Return ONLY valid JSON (no markdown):
+{{
+  "total_dishes": <exact number of actual menu items on this image>
+}}
+
+Count carefully. Be precise."""
+
+            else:
+                # Regular batch-specific prompt
+                system_prompt = load_system_prompt()
+
+                # Get total dishes if provided
+                total_dishes = payload.get('total_dishes', None)
+                total_context = f"\n\nIMPORTANT: This menu has exactly {total_dishes} dishes total." if total_dishes else ""
+
+                # Create batch-specific prompt
+                batch_instruction = f"""CRITICAL INSTRUCTIONS - READ CAREFULLY:{total_context}
+
+1. Count ONLY actual menu items (dishes with names and prices)
 2. You are analyzing dishes {start_dish} to {end_dish} ONLY
 3. Skip dishes before #{start_dish} and after #{end_dish}
 4. DO NOT invent, hallucinate, or make up dishes that are not visible
 5. If there are fewer than {end_dish} dishes total on the menu, return ONLY what actually exists and set has_more to false
 6. If dishes {start_dish} to {end_dish} don't exist on the menu, return an empty menu_items array and set has_more to false
 
+❌ IGNORE these - they are NOT menu items:
+- Labels like [super deal], [for 2 people], [recommended], [spicy]
+- Section headers (Appetizers, Main Courses, Desserts, etc.)
+- Promotional text or serving size descriptions
+- Icons or symbols
+
+✅ ONLY analyze actual dishes (food items with names)
+
 The menu is in {source_lang_name}. Translate all text to English.
 
 Count dishes from top to bottom, left to right as they appear physically on the menu."""
 
-            # Combine with JSON structure for batch-specific API call
-            prompt = f"""{system_prompt}
+                # Combine with JSON structure for batch-specific API call
+                prompt = f"""{system_prompt}
 
 {batch_instruction}
 
@@ -201,24 +243,31 @@ Provide ALL requested information for dishes {start_dish}-{end_dish} ONLY. Retur
             print(f"  🔍 Parsing JSON response...", file=sys.stderr, flush=True)
             result_json = json.loads(result_text)
 
-            menu_items_count = len(result_json.get('menu_items', []))
-            print(f"  ✓ Parsed successfully! Found {menu_items_count} menu items", file=sys.stderr, flush=True)
-
             # Return successful response
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
 
-            response_data = {
-                'original_text': result_json.get('original_text', ''),
-                'translated_text': result_json.get('translated_text', ''),
-                'menu_items': result_json.get('menu_items', []),
-                'has_more': result_json.get('has_more', False),
-                'total_dishes_estimate': result_json.get('total_dishes_estimate', len(result_json.get('menu_items', []))),
-                'batch_number': batch_number,
-                'detected_lang': 'zh'
-            }
+            # Different response format for count-only vs regular requests
+            if count_only:
+                total_dishes = result_json.get('total_dishes', 0)
+                print(f"  ✓ Count complete! Found {total_dishes} total dishes", file=sys.stderr, flush=True)
+                response_data = {
+                    'total_dishes': total_dishes
+                }
+            else:
+                menu_items_count = len(result_json.get('menu_items', []))
+                print(f"  ✓ Parsed successfully! Found {menu_items_count} menu items", file=sys.stderr, flush=True)
+                response_data = {
+                    'original_text': result_json.get('original_text', ''),
+                    'translated_text': result_json.get('translated_text', ''),
+                    'menu_items': result_json.get('menu_items', []),
+                    'has_more': result_json.get('has_more', False),
+                    'total_dishes_estimate': result_json.get('total_dishes_estimate', len(result_json.get('menu_items', []))),
+                    'batch_number': batch_number,
+                    'detected_lang': 'zh'
+                }
 
             self.wfile.write(json.dumps(response_data).encode())
 

@@ -621,7 +621,7 @@
             return card;
         }
 
-        async function fetchBatch(imageSrc, batchNumber, sourceLang, retryCount = 0) {
+        async function fetchBatch(imageSrc, batchNumber, sourceLang, totalDishes, retryCount = 0) {
             try {
                 const response = await fetch('/api/menu', {
                     method: 'POST',
@@ -631,7 +631,8 @@
                     body: JSON.stringify({
                         image: imageSrc,
                         batch_number: batchNumber,
-                        source_lang: sourceLang
+                        source_lang: sourceLang,
+                        total_dishes: totalDishes
                     })
                 });
 
@@ -645,7 +646,7 @@
                 // Retry once if this is the first failure
                 if (retryCount === 0) {
                     console.log(`Retrying batch ${batchNumber}...`);
-                    return await fetchBatch(imageSrc, batchNumber, sourceLang, 1);
+                    return await fetchBatch(imageSrc, batchNumber, sourceLang, totalDishes, 1);
                 }
                 // After retry fails, throw error to skip this batch
                 throw error;
@@ -669,43 +670,64 @@
             const sourceLang = sourceLanguage.value;
             console.log(`Processing menu in ${sourceLang} language`);
 
-            let batchNumber = 1;
             let allMenuItems = [];
             let allOriginalText = [];
             let allTranslatedText = [];
-            let totalEstimate = 0;
-            let hasMore = true;
+            let totalDishes = 0;
 
             try {
-                while (hasMore && batchNumber <= 20) {  // Max 20 batches = 40 dishes
+                // PHASE 1: Count total dishes first (fast, prevents label parsing errors)
+                loadingText.textContent = 'Counting menu items...';
+                progressBar.style.width = '5%';
+                progressInfo.textContent = 'Analyzing menu structure...';
+
+                console.log('Phase 1: Counting total dishes...');
+                const countResponse = await fetch('/api/menu', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        image: imageSrc,
+                        count_only: true,
+                        source_lang: sourceLang
+                    })
+                });
+
+                if (!countResponse.ok) {
+                    throw new Error('Failed to count menu items');
+                }
+
+                const countResult = await countResponse.json();
+                totalDishes = countResult.total_dishes || 0;
+
+                console.log(`Phase 1 complete: Found ${totalDishes} total dishes`);
+
+                if (totalDishes === 0) {
+                    throw new Error('No menu items found in image');
+                }
+
+                progressBar.style.width = '10%';
+                progressInfo.textContent = `Found ${totalDishes} dishes. Loading details...`;
+
+                // PHASE 2: Load dishes in batches with exact count
+                let batchNumber = 1;
+                let hasMore = true;
+
+                while (hasMore && allMenuItems.length < totalDishes) {
                     // Update progress UI
                     const dishesLoaded = allMenuItems.length;
                     const startDish = (batchNumber - 1) * 2 + 1;
                     const endDish = startDish + 1;
 
-                    if (batchNumber === 1) {
-                        loadingText.textContent = `Analyzing menu (dishes ${startDish}-${endDish})...`;
-                        progressBar.style.width = '10%';
-                        progressInfo.textContent = 'Starting analysis...';
-                    } else {
-                        loadingText.textContent = `Loading dishes ${startDish}-${endDish}...`;
-                        const progressPercent = totalEstimate > 0
-                            ? Math.min(90, (dishesLoaded / totalEstimate) * 100)
-                            : Math.min(90, batchNumber * 10);
-                        progressBar.style.width = progressPercent + '%';
-                        progressInfo.textContent = totalEstimate > 0
-                            ? `Loaded ${dishesLoaded} of ~${totalEstimate} dishes`
-                            : `Loaded ${dishesLoaded} dishes`;
-                    }
+                    loadingText.textContent = `Loading dishes ${startDish}-${endDish}...`;
+                    const progressPercent = 10 + (dishesLoaded / totalDishes) * 85; // 10-95%
+                    progressBar.style.width = progressPercent + '%';
+                    progressInfo.textContent = `Loaded ${dishesLoaded} of ${totalDishes} dishes`;
 
                     try {
-                        // Fetch this batch (with retry logic)
-                        const batchResult = await fetchBatch(imageSrc, batchNumber, sourceLang);
-
-                        // Store estimate from first batch
-                        if (batchNumber === 1) {
-                            totalEstimate = batchResult.total_dishes_estimate || 0;
-                        }
+                        // Fetch this batch (with retry logic and total count)
+                        const batchResult = await fetchBatch(imageSrc, batchNumber, sourceLang, totalDishes);
 
                         // Fix for mobile scroll jumping:
                         // 1. Capture scroll position BEFORE any DOM updates
@@ -752,33 +774,15 @@
                             });
                         }
 
-                        // Check if more batches needed
-                        // IMPORTANT: Default to false if has_more is not explicitly true
-                        hasMore = batchResult.has_more === true;
+                        // Check if we've loaded all dishes (exact count)
+                        if (allMenuItems.length >= totalDishes) {
+                            console.log(`Reached exact total (${totalDishes} dishes), stopping`);
+                            hasMore = false;
+                        }
 
-                        // Safety checks to prevent infinite loops:
-
-                        // 1. Stop if we got 0 dishes in this batch
+                        // Safety check: Stop if we got 0 dishes in this batch
                         if (!batchResult.menu_items || batchResult.menu_items.length === 0) {
                             console.log(`Batch ${batchNumber} returned 0 dishes, stopping`);
-                            hasMore = false;
-                        }
-
-                        // 2. If we got fewer than 2 dishes (expected batch size), likely at the end
-                        if (batchResult.menu_items && batchResult.menu_items.length < 2 && batchNumber > 1) {
-                            console.log(`Batch ${batchNumber} returned only ${batchResult.menu_items.length} dish(es), stopping`);
-                            hasMore = false;
-                        }
-
-                        // 3. Stop if total estimate is set and we've reached or exceeded it
-                        if (totalEstimate > 0 && allMenuItems.length >= totalEstimate) {
-                            console.log(`Reached estimated total (${totalEstimate} dishes), stopping`);
-                            hasMore = false;
-                        }
-
-                        // 4. Hard limit: Never go beyond 20 dishes (10 batches) to prevent AI hallucination
-                        if (allMenuItems.length >= 20) {
-                            console.log(`Reached hard limit of 20 dishes, stopping`);
                             hasMore = false;
                         }
 
