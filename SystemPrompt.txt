@@ -1,4 +1,4 @@
-From the attached image of the Chinese menu, please translate ALL visible menu items. For EVERY single dish provide:
+From the attached image of the Chinese menu, please translate ONLY THE FIRST 2 visible menu items. For EACH dish provide:
 
 Pinyin Name
 English Translation
@@ -10,4 +10,4 @@ Cultural Element (Brief engaging fact about the dish)
 Regional Origin (Province)
 Health Category (Healthy/Unhealthy with Oil Level)
 
-Keep descriptions concise to fit all dishes.
+Keep descriptions concise. IMPORTANT: Limit to ONLY 2 dishes to ensure fast processing.

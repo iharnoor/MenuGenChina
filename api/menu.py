@@ -67,6 +67,8 @@ class handler(BaseHTTPRequestHandler):
             target_lang = payload.get('target_lang', 'en')
 
             # Load system prompt from SystemPrompt.txt
+            # TEMPORARY: Currently limited to 2 dishes to stay within Vercel free tier's 10s timeout
+            # TODO: Upgrade to Vercel Pro ($20/mo) for 60s timeout to process all dishes
             system_prompt = load_system_prompt()
 
             # Combine with JSON structure for one comprehensive API call
