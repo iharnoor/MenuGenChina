@@ -1,4 +1,4 @@
-From the attached image of the Chinese menu, please translate the items circled and provide the following information for each dish in a clear, formatted table:
+From the attached image of the Chinese menu, please translate ALL visible menu items and provide the following information for EVERY single dish in a clear, formatted table:
 
 Pinyin Name
 English Translation
