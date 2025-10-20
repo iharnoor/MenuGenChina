@@ -49,6 +49,8 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({'error': 'GEMINI_API_KEY not configured'}).encode())
                 return
 
+            print(f"  ✓ API key loaded (length: {len(api_key)} chars)", file=sys.stderr, flush=True)
+
             # Get image data
             print(f"  🖼️  Decoding image data...", file=sys.stderr, flush=True)
             image_data = payload.get('image', '')
@@ -111,15 +113,31 @@ Provide ALL requested information for EVERY dish in ONE response. Return valid J
             print(f"  🌐 Calling Gemini API (gemini-2.0-flash-exp)...", file=sys.stderr, flush=True)
             api_start = datetime.now()
 
-            # Make API request
-            response = requests.post(
-                f"{gemini_url}?key={api_key}",
-                headers={"Content-Type": "application/json"},
-                json=payload_data,
-                timeout=60
-            )
-            response.raise_for_status()
-            gemini_result = response.json()
+            # Make API request with error handling
+            try:
+                response = requests.post(
+                    f"{gemini_url}?key={api_key}",
+                    headers={"Content-Type": "application/json"},
+                    json=payload_data,
+                    timeout=25  # Reduced to stay under Vercel's 30s limit
+                )
+
+                print(f"  📡 API responded with status: {response.status_code}", file=sys.stderr, flush=True)
+
+                if response.status_code != 200:
+                    error_text = response.text[:500]  # Log first 500 chars of error
+                    print(f"  ❌ API Error Response: {error_text}", file=sys.stderr, flush=True)
+                    raise Exception(f"Gemini API error ({response.status_code}): {error_text}")
+
+                response.raise_for_status()
+                gemini_result = response.json()
+
+            except requests.exceptions.Timeout:
+                print(f"  ❌ API request timed out after 25s", file=sys.stderr, flush=True)
+                raise Exception("Gemini API request timed out")
+            except requests.exceptions.RequestException as e:
+                print(f"  ❌ Request failed: {str(e)}", file=sys.stderr, flush=True)
+                raise Exception(f"Failed to connect to Gemini API: {str(e)}")
 
             api_duration = (datetime.now() - api_start).total_seconds()
             print(f"  ✓ Gemini API responded in {api_duration:.2f}s", file=sys.stderr, flush=True)
