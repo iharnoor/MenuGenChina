@@ -1,0 +1,10 @@
+From the attached image of the Chinese menu, please translate the items circled and provide the following information for each dish in a clear, formatted table:
+
+Pinyin Name
+English Translation
+Core Ingredients (list the main components, not just the protein)
+Pork Alert (State 'Yes' or 'No' and specify the type of pork if applicable, e.g., 'Pork Belly')
+Beef Alert (State 'Yes' or 'No' and specify the type of beef if applicable, e.g., 'Sliced Beef')
+Spice Level (Use a 1-5 scale, e.g., '3/5 - Medium Spicy')
+Cultural Element (A brief, engaging fact or history point about the dish for conversation)
+Health Category (Oil Level) (Categorize as Healthy or Unhealthy and specify the estimated oil level (Low/Medium/High Oil))

@@ -424,150 +424,7 @@
         }
 
 
-        async function fetchDishDetails(item, index) {
-            try {
-                // Update button to show loading state
-                const card = document.querySelector(`[data-dish-index="${index}"]`);
-                const detailsBtn = card.querySelector('.details-btn');
-                if (detailsBtn) {
-                    detailsBtn.textContent = '⏳ Loading...';
-                    detailsBtn.disabled = true;
-                }
-
-                const response = await fetch('/api/dish-details', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        chinese_name: item.chinese,
-                        english_name: item.english
-                    })
-                });
-
-                if (response.ok) {
-                    const details = await response.json();
-                    updateCardWithDetails(index, details);
-
-                    // Hide the button after loading
-                    if (detailsBtn) {
-                        detailsBtn.style.display = 'none';
-                    }
-                } else {
-                    throw new Error('Failed to fetch details');
-                }
-            } catch (error) {
-                console.error(`Error fetching details for ${item.english}:`, error);
-
-                // Show error state
-                const card = document.querySelector(`[data-dish-index="${index}"]`);
-                const detailsBtn = card.querySelector('.details-btn');
-                if (detailsBtn) {
-                    detailsBtn.textContent = '❌ Failed - Try Again';
-                    detailsBtn.disabled = false;
-                }
-            }
-        }
-
-        function updateCardWithDetails(index, details) {
-            const card = document.querySelector(`[data-dish-index="${index}"]`);
-            if (!card) return;
-
-            const detailsContainer = card.querySelector('.menu-item-details');
-            if (!detailsContainer) return;
-
-            // Update with detailed information
-            detailsContainer.innerHTML = '';
-
-            // Regional origin
-            if (details.regional_origin) {
-                detailsContainer.innerHTML += `
-                    <div class="detail-section">
-                        <span class="detail-label">📍 Origin:</span>
-                        <span class="detail-value">${details.regional_origin}</span>
-                    </div>
-                `;
-            }
-
-            // Spiciness level
-            if (details.spiciness_level) {
-                const spiceLevel = details.spiciness_level.toLowerCase();
-                let spiceIcons = '';
-                if (spiceLevel.includes('very hot')) spiceIcons = '🌶️🌶️🌶️🌶️';
-                else if (spiceLevel.includes('hot')) spiceIcons = '🌶️🌶️🌶️';
-                else if (spiceLevel.includes('medium')) spiceIcons = '🌶️🌶️';
-                else if (spiceLevel.includes('mild')) spiceIcons = '🌶️';
-                else spiceIcons = '😊 Not spicy';
-
-                detailsContainer.innerHTML += `
-                    <div class="detail-section">
-                        <span class="detail-label">🌶️ Spiciness:</span>
-                        <span class="detail-value spiciness">${spiceIcons}</span>
-                    </div>
-                `;
-            }
-
-            // Ingredients
-            if (details.ingredients && details.ingredients.length > 0) {
-                detailsContainer.innerHTML += `
-                    <div class="detail-section">
-                        <span class="detail-label">🥘 Ingredients:</span>
-                        <div class="tags">
-                            ${details.ingredients.map(ing => `<span class="tag">${ing}</span>`).join('')}
-                        </div>
-                    </div>
-                `;
-            }
-
-            // Dietary information
-            if (details.dietary_info && details.dietary_info.length > 0) {
-                detailsContainer.innerHTML += `
-                    <div class="detail-section">
-                        <span class="detail-label">🥗 Dietary Info:</span>
-                        <div class="tags">
-                            ${details.dietary_info.map(diet => {
-                                const className = diet.toLowerCase().replace(/[^a-z]/g, '-');
-                                return `<span class="tag ${className}">${diet}</span>`;
-                            }).join('')}
-                        </div>
-                    </div>
-                `;
-            }
-
-            // Recommended pairings
-            if (details.recommended_pairings && details.recommended_pairings.length > 0) {
-                detailsContainer.innerHTML += `
-                    <div class="detail-section">
-                        <span class="detail-label">🍚 Pairs well with:</span>
-                        <span class="detail-value">${details.recommended_pairings.join(', ')}</span>
-                    </div>
-                `;
-            }
-
-            // Nutritional info
-            if (details.nutritional_info) {
-                detailsContainer.innerHTML += `
-                    <div class="detail-section">
-                        <span class="detail-label">💪 Nutrition:</span>
-                        <span class="detail-value">${details.nutritional_info}</span>
-                    </div>
-                `;
-            }
-
-            // Cultural details
-            const existingCultural = card.querySelector('.cultural-details');
-            if (existingCultural) {
-                existingCultural.remove();
-            }
-
-            if (details.cultural_details) {
-                const cultural = document.createElement('div');
-                cultural.className = 'cultural-details';
-                cultural.innerHTML = `<strong>📖 Cultural Background:</strong><br>${details.cultural_details}`;
-                card.appendChild(cultural);
-            }
-
-        }
+        // No more batch loading needed - everything comes in one call! 🚀
 
         function createMenuItemCard(item, index) {
             const card = document.createElement('div');
@@ -587,18 +444,105 @@
             `;
             card.appendChild(header);
 
-            // Details section with "Show Details" button
+            // All details are already loaded from the single API call!
             const details = document.createElement('div');
             details.className = 'menu-item-details';
 
-            const detailsBtn = document.createElement('button');
-            detailsBtn.className = 'details-btn upload-btn';
-            detailsBtn.style.marginTop = '10px';
-            detailsBtn.textContent = '🔍 Show Details';
-            detailsBtn.onclick = () => fetchDishDetails(item, index);
-            details.appendChild(detailsBtn);
+            // Pork/Beef Alerts (Important for dietary restrictions)
+            if (item.pork_alert && item.pork_alert !== 'No') {
+                details.innerHTML += `
+                    <div class="detail-section">
+                        <span class="detail-label" style="color: #e74c3c;">🐷 Pork Alert:</span>
+                        <span class="detail-value" style="color: #e74c3c; font-weight: bold;">${item.pork_alert}</span>
+                    </div>
+                `;
+            }
+
+            if (item.beef_alert && item.beef_alert !== 'No') {
+                details.innerHTML += `
+                    <div class="detail-section">
+                        <span class="detail-label" style="color: #d35400;">🐮 Beef Alert:</span>
+                        <span class="detail-value" style="color: #d35400; font-weight: bold;">${item.beef_alert}</span>
+                    </div>
+                `;
+            }
+
+            // Regional origin
+            if (item.regional_origin) {
+                details.innerHTML += `
+                    <div class="detail-section">
+                        <span class="detail-label">📍 Origin:</span>
+                        <span class="detail-value">${item.regional_origin}</span>
+                    </div>
+                `;
+            }
+
+            // Spiciness level
+            if (item.spiciness_level) {
+                const spiceLevel = item.spiciness_level.toLowerCase();
+                let spiceIcons = '';
+                if (spiceLevel.includes('5/5') || spiceLevel.includes('very')) spiceIcons = '🌶️🌶️🌶️🌶️🌶️';
+                else if (spiceLevel.includes('4/5')) spiceIcons = '🌶️🌶️🌶️🌶️';
+                else if (spiceLevel.includes('3/5') || spiceLevel.includes('medium')) spiceIcons = '🌶️🌶️🌶️';
+                else if (spiceLevel.includes('2/5')) spiceIcons = '🌶️🌶️';
+                else if (spiceLevel.includes('1/5') || spiceLevel.includes('mild')) spiceIcons = '🌶️';
+                else spiceIcons = '😊 Not spicy';
+
+                details.innerHTML += `
+                    <div class="detail-section">
+                        <span class="detail-label">🌶️ Spiciness:</span>
+                        <span class="detail-value spiciness">${spiceIcons} ${item.spiciness_level}</span>
+                    </div>
+                `;
+            }
+
+            // Health category (Oil level)
+            if (item.health_category) {
+                const healthIcon = item.health_category.toLowerCase().includes('healthy') ? '✅' : '⚠️';
+                details.innerHTML += `
+                    <div class="detail-section">
+                        <span class="detail-label">${healthIcon} Health:</span>
+                        <span class="detail-value">${item.health_category}</span>
+                    </div>
+                `;
+            }
+
+            // Ingredients
+            if (item.ingredients && item.ingredients.length > 0) {
+                details.innerHTML += `
+                    <div class="detail-section">
+                        <span class="detail-label">🥘 Ingredients:</span>
+                        <div class="tags">
+                            ${item.ingredients.map(ing => `<span class="tag">${ing}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Dietary information
+            if (item.dietary_info && item.dietary_info.length > 0) {
+                details.innerHTML += `
+                    <div class="detail-section">
+                        <span class="detail-label">🥗 Dietary Info:</span>
+                        <div class="tags">
+                            ${item.dietary_info.map(diet => {
+                                const className = diet.toLowerCase().replace(/[^a-z]/g, '-');
+                                return `<span class="tag ${className}">${diet}</span>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
 
             card.appendChild(details);
+
+            // Cultural details at the bottom
+            if (item.cultural_details) {
+                const cultural = document.createElement('div');
+                cultural.className = 'cultural-details';
+                cultural.innerHTML = `<strong>📖 Cultural Background:</strong><br>${item.cultural_details}`;
+                card.appendChild(cultural);
+            }
 
             return card;
         }
@@ -609,11 +553,11 @@
             results.style.display = 'none';
 
             try {
-                // OCR Processing via Serverless API
-                loadingText.textContent = 'Extracting text from menu... (this may take 7-10 seconds)';
-                progressBar.style.width = '20%';
+                // Single comprehensive Gemini call - gets EVERYTHING at once!
+                loadingText.textContent = 'Analyzing menu and getting all dish details... (one comprehensive call)';
+                progressBar.style.width = '30%';
 
-                const ocrResponse = await fetch('/api/ocr', {
+                const ocrResponse = await fetch('/api/menu', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -637,8 +581,8 @@
                     throw new Error('No text found in image');
                 }
 
-                loadingText.textContent = 'Parsing menu items...';
-                progressBar.style.width = '50%';
+                loadingText.textContent = 'All details received! Displaying menu...';
+                progressBar.style.width = '90%';
 
                 extractedText.textContent = originalText.trim();
                 translatedText.textContent = translatedTextFromAPI.trim();
@@ -650,7 +594,7 @@
                 if (ocrResult.menu_items && ocrResult.menu_items.length > 0) {
                     menuItemsContainer.innerHTML = '';
 
-                    // Show basic cards immediately with "Show Details" buttons
+                    // All details already loaded! Just display them
                     ocrResult.menu_items.forEach((item, index) => {
                         const card = createMenuItemCard(item, index);
                         menuItemsContainer.appendChild(card);
