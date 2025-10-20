@@ -67,15 +67,17 @@ class handler(BaseHTTPRequestHandler):
                 end_dish = start_dish + dishes_per_batch - 1
                 print(f"  📦 Processing batch {batch_number} (dishes {start_dish}-{end_dish})...", file=sys.stderr, flush=True)
 
-            # Get image data
-            print(f"  🖼️  Decoding image data...", file=sys.stderr, flush=True)
-            image_data = payload.get('image', '')
-            if ',' in image_data:
-                image_data = image_data.split(',')[1]
+            # Get image data (skip for health analysis mode which uses dish JSON instead)
+            image_base64 = None
+            if not analyze_health:
+                print(f"  🖼️  Decoding image data...", file=sys.stderr, flush=True)
+                image_data = payload.get('image', '')
+                if ',' in image_data:
+                    image_data = image_data.split(',')[1]
 
-            image_bytes = base64.b64decode(image_data)
-            image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-            print(f"  ✓ Image decoded ({len(image_bytes)} bytes)", file=sys.stderr, flush=True)
+                image_bytes = base64.b64decode(image_data)
+                image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+                print(f"  ✓ Image decoded ({len(image_bytes)} bytes)", file=sys.stderr, flush=True)
 
             # Prepare Gemini API request
             gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
@@ -222,17 +224,19 @@ Return ONLY valid JSON (no markdown, no code blocks) with this structure:
 
 Provide ALL requested information for dishes {start_dish}-{end_dish} ONLY. Return valid JSON only."""
 
+            # Build parts array - only include image for non-health-analysis requests
+            parts = [{"text": prompt}]
+            if image_base64 is not None:
+                parts.append({
+                    "inline_data": {
+                        "mime_type": "image/jpeg",
+                        "data": image_base64
+                    }
+                })
+
             payload_data = {
                 "contents": [{
-                    "parts": [
-                        {"text": prompt},
-                        {
-                            "inline_data": {
-                                "mime_type": "image/jpeg",
-                                "data": image_base64
-                            }
-                        }
-                    ]
+                    "parts": parts
                 }]
             }
 
