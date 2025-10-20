@@ -6,6 +6,7 @@ Top 3 Ingredients
 Pork Alert ('Yes - Type' or 'No')
 Beef Alert ('Yes - Type' or 'No')
 Spice Level (1-5 scale with brief description)
+Cultural Element (Brief engaging fact about the dish)
 Regional Origin (Province)
 Health Category (Healthy/Unhealthy with Oil Level)
 
