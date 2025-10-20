@@ -309,18 +309,46 @@ Provide ALL requested information for dishes {start_dish}-{end_dish} ONLY. Retur
 
                 # Generate images for top 2 dishes using Gemini 2.5 Flash Image (Nano Banana)
                 print(f"  🎨 Generating images for top 2 healthiest dishes...", file=sys.stderr, flush=True)
+
+                # Load the black image (nanobanana.png) to use as input
+                black_image_path = Path(__file__).parent.parent / "nanobanana.png"
+                if not black_image_path.exists():
+                    # Fallback: try current directory
+                    black_image_path = Path(__file__).parent / "nanobanana.png"
+
+                black_image_base64 = None
+                if black_image_path.exists():
+                    with open(black_image_path, 'rb') as f:
+                        black_image_bytes = f.read()
+                        black_image_base64 = base64.b64encode(black_image_bytes).decode('utf-8')
+                    print(f"  ✓ Loaded black image from {black_image_path}", file=sys.stderr, flush=True)
+                else:
+                    print(f"  ⚠️  Black image not found at {black_image_path}", file=sys.stderr, flush=True)
+
                 for i, dish_rec in enumerate(top_2):
                     try:
                         dish_name = dish_rec.get('dish_name', '')
                         # Create realistic food photography prompt
-                        image_prompt = f"Professional food photography of {dish_name}, beautifully plated on a white ceramic plate, natural lighting, restaurant quality, appetizing presentation, 4k quality, sharp focus"
+                        image_prompt = f"Create a professional food photography of {dish_name}, beautifully plated on a white ceramic plate, natural lighting, restaurant quality, appetizing presentation, 4k quality, sharp focus"
 
                         print(f"  📸 Generating image {i+1}: {dish_name}", file=sys.stderr, flush=True)
 
-                        # Call Gemini 2.5 Flash Image model
+                        # Call Gemini 2.5 Flash Image model with black image as input
+                        # This allows text-to-image generation by "transforming" the black image
+                        parts = [{"text": image_prompt}]
+
+                        if black_image_base64:
+                            # Add the black image as input (the trick to enable text-to-image!)
+                            parts.append({
+                                "inline_data": {
+                                    "mime_type": "image/png",
+                                    "data": black_image_base64
+                                }
+                            })
+
                         image_payload = {
                             "contents": [{
-                                "parts": [{"text": image_prompt}]
+                                "parts": parts
                             }],
                             "generationConfig": {
                                 "response_modalities": ["IMAGE"],
