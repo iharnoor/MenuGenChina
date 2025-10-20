@@ -38,15 +38,15 @@ class handler(BaseHTTPRequestHandler):
             payload = json.loads(body.decode('utf-8'))
             print(f"  ✓ Request parsed ({content_length} bytes)", file=sys.stderr, flush=True)
 
-            # Get OpenAI API key from environment
-            api_key = os.environ.get('OPENAI_API_KEY')
+            # Get Gemini API key from environment
+            api_key = os.environ.get('GEMINI_API_KEY')
             if not api_key:
-                print(f"  ❌ Error: OPENAI_API_KEY not configured", file=sys.stderr, flush=True)
+                print(f"  ❌ Error: GEMINI_API_KEY not configured", file=sys.stderr, flush=True)
                 self.send_response(500)
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
-                self.wfile.write(json.dumps({'error': 'OPENAI_API_KEY not configured'}).encode())
+                self.wfile.write(json.dumps({'error': 'GEMINI_API_KEY not configured'}).encode())
                 return
 
             # Get image data
@@ -59,8 +59,8 @@ class handler(BaseHTTPRequestHandler):
             image_base64 = base64.b64encode(image_bytes).decode('utf-8')
             print(f"  ✓ Image decoded ({len(image_bytes)} bytes)", file=sys.stderr, flush=True)
 
-            # Prepare OpenAI API request
-            openai_url = "https://api.openai.com/v1/chat/completions"
+            # Prepare Gemini API request
+            gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent"
 
             target_lang = payload.get('target_lang', 'en')
 
@@ -95,58 +95,46 @@ Return ONLY valid JSON (no markdown, no code blocks) with this structure:
 Provide ALL requested information for EVERY dish in ONE response. Return valid JSON only."""
 
             payload_data = {
-                "model": "gpt-4o",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{image_base64}"
-                                }
+                "contents": [{
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "inline_data": {
+                                "mime_type": "image/jpeg",
+                                "data": image_base64
                             }
-                        ]
-                    }
-                ],
-                "max_tokens": 4096
+                        }
+                    ]
+                }]
             }
 
-            print(f"  🌐 Calling OpenAI API (gpt-4o)...", file=sys.stderr, flush=True)
+            print(f"  🌐 Calling Gemini API (gemini-2.0-flash-exp)...", file=sys.stderr, flush=True)
             api_start = datetime.now()
 
             # Make API request
             response = requests.post(
-                openai_url,
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}"
-                },
+                f"{gemini_url}?key={api_key}",
+                headers={"Content-Type": "application/json"},
                 json=payload_data,
                 timeout=60
             )
             response.raise_for_status()
-            openai_result = response.json()
+            gemini_result = response.json()
 
             api_duration = (datetime.now() - api_start).total_seconds()
-            print(f"  ✓ OpenAI API responded in {api_duration:.2f}s", file=sys.stderr, flush=True)
+            print(f"  ✓ Gemini API responded in {api_duration:.2f}s", file=sys.stderr, flush=True)
 
-            # Parse OpenAI's response
-            print(f"  📊 Parsing OpenAI response...", file=sys.stderr, flush=True)
-            if 'choices' in openai_result and len(openai_result['choices']) > 0:
-                choice = openai_result['choices'][0]
-                if 'message' in choice and 'content' in choice['message']:
-                    result_text = choice['message']['content'].strip()
+            # Parse Gemini's response
+            print(f"  📊 Parsing Gemini response...", file=sys.stderr, flush=True)
+            if 'candidates' in gemini_result and len(gemini_result['candidates']) > 0:
+                candidate = gemini_result['candidates'][0]
+                if 'content' in candidate and 'parts' in candidate['content']:
+                    result_text = candidate['content']['parts'][0]['text'].strip()
                     print(f"  ✓ Response text length: {len(result_text)} chars", file=sys.stderr, flush=True)
-                    print(f"  📝 Response preview: {result_text[:200]}...", file=sys.stderr, flush=True)
                 else:
-                    raise Exception("Unexpected OpenAI response format")
+                    raise Exception("Unexpected Gemini response format")
             else:
-                raise Exception("No response from OpenAI")
+                raise Exception("No response from Gemini")
 
             # Remove markdown code blocks if present
             if result_text.startswith('```'):
