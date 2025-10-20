@@ -156,6 +156,52 @@
             box-shadow: 0 3px 10px rgba(0,0,0,0.1);
             border-left: 5px solid #66bb6a;
             position: relative;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            align-items: start;
+        }
+
+        @media (max-width: 768px) {
+            .health-recommendation-card {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .health-card-content {
+            order: 1;
+        }
+
+        .health-card-image {
+            order: 2;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .health-card-image img {
+            width: 100%;
+            height: auto;
+            display: block;
+            object-fit: cover;
+            max-height: 300px;
+        }
+
+        .image-loading {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            height: 200px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+        }
+
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
         }
 
         .health-recommendation-card:first-of-type {
@@ -778,26 +824,30 @@
                 const card = document.createElement('div');
                 card.className = 'health-recommendation-card';
 
+                // Content column (left side)
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'health-card-content';
+
                 const rankBadge = document.createElement('div');
                 rankBadge.className = index === 0 ? 'health-rank' : 'health-rank second';
                 rankBadge.textContent = index === 0 ? '🏆 #1 Healthiest' : '🥈 #2 Healthiest';
-                card.appendChild(rankBadge);
+                contentDiv.appendChild(rankBadge);
 
                 const dishName = document.createElement('h4');
                 dishName.textContent = recommendation.dish_name;
                 dishName.style.marginRight = '120px'; // Space for rank badge
-                card.appendChild(dishName);
+                contentDiv.appendChild(dishName);
 
                 const scoreDiv = document.createElement('div');
                 scoreDiv.className = 'health-score';
                 scoreDiv.textContent = `Health Score: ${recommendation.health_score}/10`;
-                card.appendChild(scoreDiv);
+                contentDiv.appendChild(scoreDiv);
 
                 const reasoning = document.createElement('p');
                 reasoning.textContent = recommendation.reasoning;
                 reasoning.style.marginTop = '10px';
                 reasoning.style.lineHeight = '1.6';
-                card.appendChild(reasoning);
+                contentDiv.appendChild(reasoning);
 
                 if (recommendation.health_benefits && recommendation.health_benefits.length > 0) {
                     const benefitsDiv = document.createElement('div');
@@ -810,7 +860,7 @@
                         benefitsDiv.appendChild(benefitItem);
                     });
 
-                    card.appendChild(benefitsDiv);
+                    contentDiv.appendChild(benefitsDiv);
                 }
 
                 if (recommendation.warnings && recommendation.warnings.length > 0) {
@@ -818,7 +868,7 @@
                         const warningItem = document.createElement('div');
                         warningItem.className = 'health-benefit-item health-warning';
                         warningItem.textContent = warning;
-                        card.appendChild(warningItem);
+                        contentDiv.appendChild(warningItem);
                     });
                 }
 
@@ -826,9 +876,29 @@
                     const bestForDiv = document.createElement('div');
                     bestForDiv.className = 'best-for';
                     bestForDiv.innerHTML = `<strong>Perfect for:</strong> ${recommendation.best_for}`;
-                    card.appendChild(bestForDiv);
+                    contentDiv.appendChild(bestForDiv);
                 }
 
+                // Image column (right side)
+                const imageDiv = document.createElement('div');
+                imageDiv.className = 'health-card-image';
+
+                if (recommendation.generated_image) {
+                    const img = document.createElement('img');
+                    img.src = recommendation.generated_image;
+                    img.alt = `Photo of ${recommendation.dish_name}`;
+                    img.loading = 'lazy';
+                    imageDiv.appendChild(img);
+                } else {
+                    // Show loading placeholder if image not generated yet
+                    const loadingDiv = document.createElement('div');
+                    loadingDiv.className = 'image-loading';
+                    loadingDiv.textContent = 'Generating image...';
+                    imageDiv.appendChild(loadingDiv);
+                }
+
+                card.appendChild(contentDiv);
+                card.appendChild(imageDiv);
                 container.appendChild(card);
             });
 

@@ -306,6 +306,56 @@ Provide ALL requested information for dishes {start_dish}-{end_dish} ONLY. Retur
             elif analyze_health:
                 top_2 = result_json.get('top_2_healthiest', [])
                 print(f"  ✓ Health analysis complete! Selected top 2 healthiest dishes", file=sys.stderr, flush=True)
+
+                # Generate images for top 2 dishes using Gemini 2.5 Flash Image (Nano Banana)
+                print(f"  🎨 Generating images for top 2 healthiest dishes...", file=sys.stderr, flush=True)
+                for i, dish_rec in enumerate(top_2):
+                    try:
+                        dish_name = dish_rec.get('dish_name', '')
+                        # Create realistic food photography prompt
+                        image_prompt = f"Professional food photography of {dish_name}, beautifully plated on a white ceramic plate, natural lighting, restaurant quality, appetizing presentation, 4k quality, sharp focus"
+
+                        print(f"  📸 Generating image {i+1}: {dish_name}", file=sys.stderr, flush=True)
+
+                        # Call Gemini 2.5 Flash Image model
+                        image_payload = {
+                            "contents": [{
+                                "parts": [{"text": image_prompt}]
+                            }],
+                            "generationConfig": {
+                                "response_modalities": ["IMAGE"],
+                                "image_config": {
+                                    "aspect_ratio": "16:9"
+                                }
+                            }
+                        }
+
+                        image_response = requests.post(
+                            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key={api_key}",
+                            headers={"Content-Type": "application/json"},
+                            json=image_payload,
+                            timeout=30
+                        )
+
+                        if image_response.status_code == 200:
+                            image_result = image_response.json()
+                            # Extract base64 image data
+                            if 'candidates' in image_result and len(image_result['candidates']) > 0:
+                                candidate = image_result['candidates'][0]
+                                if 'content' in candidate and 'parts' in candidate['content']:
+                                    for part in candidate['content']['parts']:
+                                        if 'inline_data' in part:
+                                            # Add base64 image to dish recommendation
+                                            dish_rec['generated_image'] = f"data:image/png;base64,{part['inline_data']['data']}"
+                                            print(f"  ✓ Image {i+1} generated successfully", file=sys.stderr, flush=True)
+                                            break
+                        else:
+                            print(f"  ⚠️  Image generation failed for dish {i+1}: HTTP {image_response.status_code}", file=sys.stderr, flush=True)
+
+                    except Exception as img_error:
+                        print(f"  ⚠️  Error generating image {i+1}: {str(img_error)}", file=sys.stderr, flush=True)
+                        # Continue without image if generation fails
+
                 response_data = {
                     'top_2_healthiest': top_2
                 }
