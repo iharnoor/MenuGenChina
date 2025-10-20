@@ -142,6 +142,7 @@ Provide ALL requested information for EVERY dish in ONE response. Return valid J
                 if 'message' in choice and 'content' in choice['message']:
                     result_text = choice['message']['content'].strip()
                     print(f"  ✓ Response text length: {len(result_text)} chars", file=sys.stderr, flush=True)
+                    print(f"  📝 Response preview: {result_text[:200]}...", file=sys.stderr, flush=True)
                 else:
                     raise Exception("Unexpected OpenAI response format")
             else:

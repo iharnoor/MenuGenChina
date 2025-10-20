@@ -400,10 +400,10 @@
             img.onload = () => {
                 const canvas = document.createElement('canvas');
 
-                // Resize to max 600px width while maintaining aspect ratio (optimized for serverless)
+                // Resize to max 1200px width while maintaining aspect ratio (OpenAI needs better quality)
                 let width = img.width;
                 let height = img.height;
-                const maxWidth = 600;
+                const maxWidth = 1200;
 
                 if (width > maxWidth) {
                     height = (height * maxWidth) / width;
@@ -416,8 +416,8 @@
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
 
-                // Convert to JPEG with 70% quality for faster upload and processing
-                const compressed = canvas.toDataURL('image/jpeg', 0.70);
+                // Convert to JPEG with 85% quality for better OCR accuracy
+                const compressed = canvas.toDataURL('image/jpeg', 0.85);
                 callback(compressed);
             };
             img.src = dataUrl;
