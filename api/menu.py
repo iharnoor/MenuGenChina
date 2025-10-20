@@ -89,12 +89,18 @@ class handler(BaseHTTPRequestHandler):
             system_prompt = load_system_prompt()
 
             # Create batch-specific prompt
-            batch_instruction = f"""IMPORTANT: Only analyze dishes {start_dish} to {end_dish} from this menu.
-Skip all dishes before dish {start_dish} and after dish {end_dish}.
-Count dishes from top to bottom, left to right as they appear on the menu.
-If there are fewer than {end_dish} dishes total, return only what exists and set has_more to false.
+            batch_instruction = f"""CRITICAL INSTRUCTIONS - READ CAREFULLY:
 
-The menu is in {source_lang_name}. Translate all text to English."""
+1. Count ONLY the actual dishes visible on this menu image
+2. You are analyzing dishes {start_dish} to {end_dish} ONLY
+3. Skip dishes before #{start_dish} and after #{end_dish}
+4. DO NOT invent, hallucinate, or make up dishes that are not visible
+5. If there are fewer than {end_dish} dishes total on the menu, return ONLY what actually exists and set has_more to false
+6. If dishes {start_dish} to {end_dish} don't exist on the menu, return an empty menu_items array and set has_more to false
+
+The menu is in {source_lang_name}. Translate all text to English.
+
+Count dishes from top to bottom, left to right as they appear physically on the menu."""
 
             # Combine with JSON structure for batch-specific API call
             prompt = f"""{system_prompt}

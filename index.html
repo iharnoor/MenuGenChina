@@ -756,8 +756,29 @@
                         // IMPORTANT: Default to false if has_more is not explicitly true
                         hasMore = batchResult.has_more === true;
 
-                        // Additional safety: Stop if we got fewer dishes than expected
-                        if (batchResult.menu_items && batchResult.menu_items.length === 0) {
+                        // Safety checks to prevent infinite loops:
+
+                        // 1. Stop if we got 0 dishes in this batch
+                        if (!batchResult.menu_items || batchResult.menu_items.length === 0) {
+                            console.log(`Batch ${batchNumber} returned 0 dishes, stopping`);
+                            hasMore = false;
+                        }
+
+                        // 2. If we got fewer than 2 dishes (expected batch size), likely at the end
+                        if (batchResult.menu_items && batchResult.menu_items.length < 2 && batchNumber > 1) {
+                            console.log(`Batch ${batchNumber} returned only ${batchResult.menu_items.length} dish(es), stopping`);
+                            hasMore = false;
+                        }
+
+                        // 3. Stop if total estimate is set and we've reached or exceeded it
+                        if (totalEstimate > 0 && allMenuItems.length >= totalEstimate) {
+                            console.log(`Reached estimated total (${totalEstimate} dishes), stopping`);
+                            hasMore = false;
+                        }
+
+                        // 4. Hard limit: Never go beyond 20 dishes (10 batches) to prevent AI hallucination
+                        if (allMenuItems.length >= 20) {
+                            console.log(`Reached hard limit of 20 dishes, stopping`);
                             hasMore = false;
                         }
 
