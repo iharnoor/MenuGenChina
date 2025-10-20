@@ -706,6 +706,10 @@
                         if (batchResult.menu_items && batchResult.menu_items.length > 0) {
                             allMenuItems.push(...batchResult.menu_items);
 
+                            // Save scroll position before adding content (prevents jumping on mobile)
+                            const scrollY = window.scrollY;
+                            const scrollX = window.scrollX;
+
                             // Display new dishes immediately
                             batchResult.menu_items.forEach((item) => {
                                 const card = createMenuItemCard(item, allMenuItems.length - 1);
@@ -713,6 +717,9 @@
                             });
 
                             menuItemsSection.style.display = 'block';
+
+                            // Restore scroll position (prevents screen jump on mobile)
+                            window.scrollTo(scrollX, scrollY);
                         }
 
                         // Update combined text displays
@@ -720,7 +727,13 @@
                         translatedText.textContent = allTranslatedText.join('\n\n');
 
                         // Check if more batches needed
-                        hasMore = batchResult.has_more !== false;
+                        // IMPORTANT: Default to false if has_more is not explicitly true
+                        hasMore = batchResult.has_more === true;
+
+                        // Additional safety: Stop if we got fewer dishes than expected
+                        if (batchResult.menu_items && batchResult.menu_items.length === 0) {
+                            hasMore = false;
+                        }
 
                         // Show first results immediately
                         if (batchNumber === 1 && allMenuItems.length > 0) {
@@ -729,11 +742,22 @@
 
                     } catch (batchError) {
                         console.error(`Batch ${batchNumber} failed after retry:`, batchError);
-                        // Skip this batch and continue with next
+                        // If first batch fails, stop completely
+                        if (batchNumber === 1) {
+                            throw new Error('Failed to load initial menu data');
+                        }
+                        // Otherwise skip this batch and continue
                         console.log(`Skipping batch ${batchNumber}, continuing...`);
+                        // After 3 consecutive failures, stop trying
+                        if (batchNumber >= 3 && allMenuItems.length === 0) {
+                            throw new Error('Multiple batches failed, stopping');
+                        }
                     }
 
                     batchNumber++;
+
+                    // Safety: Log progress to help debug infinite loops
+                    console.log(`Batch ${batchNumber - 1} complete. Total dishes: ${allMenuItems.length}, hasMore: ${hasMore}`);
                 }
 
                 // All batches complete
