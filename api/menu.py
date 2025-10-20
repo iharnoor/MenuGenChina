@@ -51,11 +51,14 @@ class handler(BaseHTTPRequestHandler):
 
             print(f"  ✓ API key loaded (length: {len(api_key)} chars)", file=sys.stderr, flush=True)
 
-            # Check if this is a count-only request
+            # Check request type
             count_only = payload.get('count_only', False)
+            analyze_health = payload.get('analyze_health', False)
 
             if count_only:
                 print(f"  🔢 Count-only mode: determining total number of dishes...", file=sys.stderr, flush=True)
+            elif analyze_health:
+                print(f"  🥗 Health analysis mode: finding healthiest options...", file=sys.stderr, flush=True)
             else:
                 # Get batch number for progressive loading (default to batch 1)
                 batch_number = payload.get('batch_number', 1)
@@ -113,6 +116,50 @@ Return ONLY valid JSON (no markdown):
 }}
 
 Count carefully. Be precise."""
+
+            elif analyze_health:
+                # Health analysis prompt
+                dishes_json = json.dumps(payload.get('dishes', []), ensure_ascii=False)
+
+                prompt = f"""Analyze these menu dishes and select the TOP 2 HEALTHIEST options.
+
+Dishes to analyze:
+{dishes_json}
+
+Evaluation criteria (in order of importance):
+1. Cooking method (steamed/boiled > grilled > stir-fried > deep-fried)
+2. Oil level (lower is healthier)
+3. Ingredient quality (vegetables, lean protein, whole grains)
+4. Nutritional balance (protein, fiber, vitamins)
+5. Processing level (fresh > minimally processed > highly processed)
+6. Sodium content (lower is better)
+7. Portion appropriateness
+
+Return ONLY valid JSON (no markdown):
+{{
+  "top_2_healthiest": [
+    {{
+      "dish_index": 0,
+      "dish_name": "name of the dish",
+      "health_score": 9.5,
+      "reasoning": "2-3 sentence explanation of why this is the healthiest choice",
+      "health_benefits": ["Benefit 1", "Benefit 2", "Benefit 3", "Benefit 4"],
+      "warnings": ["Any concerns (e.g., 'High sodium')" or empty array],
+      "best_for": "Who would benefit most (e.g., 'Weight management, heart health')"
+    }},
+    {{
+      "dish_index": 1,
+      "dish_name": "name of second healthiest",
+      "health_score": 9.0,
+      "reasoning": "...",
+      "health_benefits": ["..."],
+      "warnings": ["..."],
+      "best_for": "..."
+    }}
+  ]
+}}
+
+Be specific and practical in your analysis."""
 
             else:
                 # Regular batch-specific prompt
@@ -249,12 +296,18 @@ Provide ALL requested information for dishes {start_dish}-{end_dish} ONLY. Retur
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
 
-            # Different response format for count-only vs regular requests
+            # Different response format for count-only vs health analysis vs regular requests
             if count_only:
                 total_dishes = result_json.get('total_dishes', 0)
                 print(f"  ✓ Count complete! Found {total_dishes} total dishes", file=sys.stderr, flush=True)
                 response_data = {
                     'total_dishes': total_dishes
+                }
+            elif analyze_health:
+                top_2 = result_json.get('top_2_healthiest', [])
+                print(f"  ✓ Health analysis complete! Selected top 2 healthiest dishes", file=sys.stderr, flush=True)
+                response_data = {
+                    'top_2_healthiest': top_2
                 }
             else:
                 menu_items_count = len(result_json.get('menu_items', []))

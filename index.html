@@ -132,6 +132,91 @@
             margin-top: 20px;
         }
 
+        .health-recommendations {
+            margin: 30px 0;
+            padding: 25px;
+            background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+            border-radius: 12px;
+            border: 2px solid #66bb6a;
+            display: none;
+        }
+
+        .health-recommendations h3 {
+            color: #2e7d32;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            text-align: center;
+        }
+
+        .health-recommendation-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            border-left: 5px solid #66bb6a;
+            position: relative;
+        }
+
+        .health-recommendation-card:first-of-type {
+            border-left-color: #ffd700;
+        }
+
+        .health-rank {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+            color: #000;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .health-rank.second {
+            background: linear-gradient(135deg, #c0c0c0 0%, #e8e8e8 100%);
+        }
+
+        .health-score {
+            display: inline-block;
+            background: #66bb6a;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .health-benefits {
+            margin-top: 15px;
+        }
+
+        .health-benefit-item {
+            display: flex;
+            align-items: flex-start;
+            margin: 8px 0;
+            color: #2e7d32;
+        }
+
+        .health-benefit-item::before {
+            content: "✅";
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+
+        .health-warning::before {
+            content: "⚠️";
+        }
+
+        .best-for {
+            background: #e8f5e9;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-style: italic;
+        }
+
         .menu-item-card {
             background: white;
             border: 1px solid #e0e0e0;
@@ -388,6 +473,11 @@
             <div class="text-result">
                 <h3>🌍 Translated Text</h3>
                 <p id="translatedText"></p>
+            </div>
+
+            <div class="health-recommendations" id="healthRecommendations">
+                <h3>🥗 Healthiest Options - Top 2 Picks</h3>
+                <div id="healthRecommendationsContainer"></div>
             </div>
 
             <div class="menu-items" id="menuItems" style="display: none;">
@@ -653,6 +743,99 @@
             }
         }
 
+        async function analyzeHealthiestOptions(dishes) {
+            console.log(`Analyzing ${dishes.length} dishes for health recommendations...`);
+
+            const response = await fetch('/api/menu', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    analyze_health: true,
+                    dishes: dishes
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Health analysis failed');
+            }
+
+            const result = await response.json();
+            const top2 = result.top_2_healthiest || [];
+
+            if (top2.length > 0) {
+                displayHealthRecommendations(top2, dishes);
+            }
+        }
+
+        function displayHealthRecommendations(top2, allDishes) {
+            const container = document.getElementById('healthRecommendationsContainer');
+            const section = document.getElementById('healthRecommendations');
+            container.innerHTML = '';
+
+            top2.forEach((recommendation, index) => {
+                const card = document.createElement('div');
+                card.className = 'health-recommendation-card';
+
+                const rankBadge = document.createElement('div');
+                rankBadge.className = index === 0 ? 'health-rank' : 'health-rank second';
+                rankBadge.textContent = index === 0 ? '🏆 #1 Healthiest' : '🥈 #2 Healthiest';
+                card.appendChild(rankBadge);
+
+                const dishName = document.createElement('h4');
+                dishName.textContent = recommendation.dish_name;
+                dishName.style.marginRight = '120px'; // Space for rank badge
+                card.appendChild(dishName);
+
+                const scoreDiv = document.createElement('div');
+                scoreDiv.className = 'health-score';
+                scoreDiv.textContent = `Health Score: ${recommendation.health_score}/10`;
+                card.appendChild(scoreDiv);
+
+                const reasoning = document.createElement('p');
+                reasoning.textContent = recommendation.reasoning;
+                reasoning.style.marginTop = '10px';
+                reasoning.style.lineHeight = '1.6';
+                card.appendChild(reasoning);
+
+                if (recommendation.health_benefits && recommendation.health_benefits.length > 0) {
+                    const benefitsDiv = document.createElement('div');
+                    benefitsDiv.className = 'health-benefits';
+
+                    recommendation.health_benefits.forEach(benefit => {
+                        const benefitItem = document.createElement('div');
+                        benefitItem.className = 'health-benefit-item';
+                        benefitItem.textContent = benefit;
+                        benefitsDiv.appendChild(benefitItem);
+                    });
+
+                    card.appendChild(benefitsDiv);
+                }
+
+                if (recommendation.warnings && recommendation.warnings.length > 0) {
+                    recommendation.warnings.forEach(warning => {
+                        const warningItem = document.createElement('div');
+                        warningItem.className = 'health-benefit-item health-warning';
+                        warningItem.textContent = warning;
+                        card.appendChild(warningItem);
+                    });
+                }
+
+                if (recommendation.best_for) {
+                    const bestForDiv = document.createElement('div');
+                    bestForDiv.className = 'best-for';
+                    bestForDiv.innerHTML = `<strong>Perfect for:</strong> ${recommendation.best_for}`;
+                    card.appendChild(bestForDiv);
+                }
+
+                container.appendChild(card);
+            });
+
+            section.style.display = 'block';
+            console.log('Health recommendations displayed successfully');
+        }
+
         async function processImage(imageSrc) {
             loading.style.display = 'block';
             progress.style.display = 'block';
@@ -818,6 +1001,19 @@
 
                 if (allMenuItems.length === 0) {
                     throw new Error('No menu items found in image');
+                }
+
+                // PHASE 3: Analyze healthiest options (if 2+ dishes)
+                if (allMenuItems.length >= 2) {
+                    loadingText.textContent = 'Analyzing healthiest options...';
+                    progressInfo.textContent = 'Finding the best choices for you...';
+
+                    try {
+                        await analyzeHealthiestOptions(allMenuItems);
+                    } catch (healthError) {
+                        console.error('Health analysis failed:', healthError);
+                        // Don't fail the whole process if health analysis fails
+                    }
                 }
 
                 setTimeout(() => {
