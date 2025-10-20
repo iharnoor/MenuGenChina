@@ -71,7 +71,19 @@ class handler(BaseHTTPRequestHandler):
             # Prepare Gemini API request
             gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
 
-            target_lang = payload.get('target_lang', 'en')
+            # Get source language (default to Chinese for backward compatibility)
+            source_lang = payload.get('source_lang', 'zh')
+
+            # Language name mapping for better prompts
+            lang_names = {
+                'zh': 'Chinese', 'fr': 'French', 'es': 'Spanish', 'ja': 'Japanese',
+                'ko': 'Korean', 'it': 'Italian', 'de': 'German', 'pt': 'Portuguese',
+                'th': 'Thai', 'vi': 'Vietnamese', 'ar': 'Arabic', 'ru': 'Russian',
+                'hi': 'Hindi', 'tr': 'Turkish', 'el': 'Greek'
+            }
+            source_lang_name = lang_names.get(source_lang, 'the source language')
+
+            print(f"  🌍 Source language: {source_lang_name} ({source_lang})", file=sys.stderr, flush=True)
 
             # Load system prompt from SystemPrompt.txt
             system_prompt = load_system_prompt()
@@ -80,7 +92,9 @@ class handler(BaseHTTPRequestHandler):
             batch_instruction = f"""IMPORTANT: Only analyze dishes {start_dish} to {end_dish} from this menu.
 Skip all dishes before dish {start_dish} and after dish {end_dish}.
 Count dishes from top to bottom, left to right as they appear on the menu.
-If there are fewer than {end_dish} dishes total, return only what exists and set has_more to false."""
+If there are fewer than {end_dish} dishes total, return only what exists and set has_more to false.
+
+The menu is in {source_lang_name}. Translate all text to English."""
 
             # Combine with JSON structure for batch-specific API call
             prompt = f"""{system_prompt}
@@ -89,12 +103,12 @@ If there are fewer than {end_dish} dishes total, return only what exists and set
 
 Return ONLY valid JSON (no markdown, no code blocks) with this structure:
 {{
-  "original_text": "Chinese text for dishes {start_dish}-{end_dish} only",
+  "original_text": "{source_lang_name} text for dishes {start_dish}-{end_dish} only",
   "translated_text": "English translation for dishes {start_dish}-{end_dish} only",
   "menu_items": [
     {{
-      "chinese": "dish name in Chinese characters",
-      "pinyin": "Pinyin pronunciation with tone marks",
+      "original_name": "dish name in original {source_lang_name} script",
+      "romanization": "romanized pronunciation (Pinyin for Chinese, Romaji for Japanese, etc.)",
       "english": "English translation",
       "price": "price if visible",
       "ingredients": ["main ingredient 1", "ingredient 2", "ingredient 3"],
