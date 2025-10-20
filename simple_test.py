@@ -74,7 +74,7 @@ Return ONLY valid JSON (no markdown, no code blocks) with this structure:
 Provide ALL requested information in ONE response."""
 
 # Call Gemini API
-gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
 
 payload_data = {
     "contents": [{

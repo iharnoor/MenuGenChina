@@ -62,7 +62,7 @@ class handler(BaseHTTPRequestHandler):
             print(f"  ✓ Image decoded ({len(image_bytes)} bytes)", file=sys.stderr, flush=True)
 
             # Prepare Gemini API request
-            gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+            gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
 
             target_lang = payload.get('target_lang', 'en')
 
@@ -110,7 +110,7 @@ Provide ALL requested information for EVERY dish in ONE response. Return valid J
                 }]
             }
 
-            print(f"  🌐 Calling Gemini API (gemini-1.5-flash)...", file=sys.stderr, flush=True)
+            print(f"  🌐 Calling Gemini API (gemini-2.5-flash-lite)...", file=sys.stderr, flush=True)
             api_start = datetime.now()
 
             # Make API request with error handling
