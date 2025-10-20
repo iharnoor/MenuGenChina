@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Menu Translator</title>
+    <title>Cultural Menu App</title>
     <style>
         * {
             margin: 0;
@@ -263,23 +263,78 @@
             font-size: 16px;
             background: white;
         }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 1.8rem;
+            }
+
+            .header p {
+                font-size: 0.9rem;
+            }
+
+            .upload-area {
+                padding: 20px;
+                margin: 15px;
+            }
+
+            .upload-btn {
+                padding: 10px 20px;
+                font-size: 14px;
+                width: 100%;
+                max-width: 200px;
+            }
+
+            .dish-card {
+                padding: 15px;
+            }
+
+            .dish-card h3 {
+                font-size: 1.1rem;
+            }
+
+            #results {
+                padding: 15px;
+                margin: 15px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .upload-area h3 {
+                font-size: 1.2rem;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🍽️ Menu Translator</h1>
-            <p>Upload a menu image and get instant OCR + translation</p>
+            <h1>🍽️ Cultural Menu App</h1>
+            <p>Take a photo or upload a menu image for cultural insights</p>
         </div>
 
         <div class="upload-area" id="uploadArea">
             <div>
-                <h3>📷 Upload Menu Image</h3>
-                <p>Drag & drop your menu image here, or click to select</p>
-                <input type="file" id="fileInput" accept="image/*">
-                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
-                    Choose Image
-                </button>
+                <h3>📷 Capture or Upload Menu</h3>
+                <p>Take a photo or select from your gallery</p>
+                <input type="file" id="fileInput" accept="image/*" capture="environment">
+                <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                    <button class="upload-btn" onclick="document.getElementById('fileInput').removeAttribute('capture'); document.getElementById('fileInput').click();">
+                        📁 Choose from Gallery
+                    </button>
+                    <button class="upload-btn" onclick="document.getElementById('fileInput').setAttribute('capture', 'environment'); document.getElementById('fileInput').click();">
+                        📸 Take Photo
+                    </button>
+                </div>
             </div>
             <img id="imagePreview" class="image-preview" style="display: none;">
         </div>
