@@ -707,6 +707,16 @@
                             totalEstimate = batchResult.total_dishes_estimate || 0;
                         }
 
+                        // Fix for mobile scroll jumping:
+                        // 1. Capture scroll position BEFORE any DOM updates
+                        const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                        const currentScrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+                        const viewportHeight = window.innerHeight;
+                        const documentHeight = document.documentElement.scrollHeight;
+
+                        // 2. Check if user is near the bottom (within 200px) - if so, allow natural scrolling
+                        const isNearBottom = (currentScrollTop + viewportHeight) >= (documentHeight - 200);
+
                         // Accumulate text
                         if (batchResult.original_text) {
                             allOriginalText.push(batchResult.original_text);
@@ -719,10 +729,6 @@
                         if (batchResult.menu_items && batchResult.menu_items.length > 0) {
                             allMenuItems.push(...batchResult.menu_items);
 
-                            // Save scroll position before adding content (prevents jumping on mobile)
-                            const scrollY = window.scrollY;
-                            const scrollX = window.scrollX;
-
                             // Display new dishes immediately
                             batchResult.menu_items.forEach((item) => {
                                 const card = createMenuItemCard(item, allMenuItems.length - 1);
@@ -730,14 +736,21 @@
                             });
 
                             menuItemsSection.style.display = 'block';
-
-                            // Restore scroll position (prevents screen jump on mobile)
-                            window.scrollTo(scrollX, scrollY);
                         }
 
                         // Update combined text displays
                         extractedText.textContent = allOriginalText.join('\n\n');
                         translatedText.textContent = allTranslatedText.join('\n\n');
+
+                        // 3. Restore scroll position after ALL DOM updates (unless user was at bottom)
+                        if (!isNearBottom) {
+                            // Use requestAnimationFrame to ensure DOM has fully updated and reflowed
+                            requestAnimationFrame(() => {
+                                requestAnimationFrame(() => {
+                                    window.scrollTo(currentScrollLeft, currentScrollTop);
+                                });
+                            });
+                        }
 
                         // Check if more batches needed
                         // IMPORTANT: Default to false if has_more is not explicitly true
