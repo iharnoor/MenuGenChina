@@ -91,14 +91,23 @@
             background: #f0f0f0;
             border-radius: 10px;
             overflow: hidden;
-            margin: 20px 0;
+            margin: 20px 30px;
         }
 
         .progress-bar {
-            background: #667eea;
-            height: 8px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 10px;
             width: 0%;
-            transition: width 0.3s;
+            transition: width 0.3s ease;
+            position: relative;
+        }
+
+        .progress-info {
+            text-align: center;
+            margin: 10px 30px;
+            font-size: 14px;
+            color: #666;
+            font-weight: 500;
         }
 
         .text-result {
@@ -365,6 +374,7 @@
         <div class="progress" id="progress" style="display: none;">
             <div class="progress-bar" id="progressBar"></div>
         </div>
+        <div class="progress-info" id="progressInfo" style="display: none;"></div>
 
         <div class="results" id="results">
             <div class="text-result">
@@ -392,6 +402,7 @@
         const loadingText = document.getElementById('loadingText');
         const progress = document.getElementById('progress');
         const progressBar = document.getElementById('progressBar');
+        const progressInfo = document.getElementById('progressInfo');
         const results = document.getElementById('results');
         const extractedText = document.getElementById('extractedText');
         const translatedText = document.getElementById('translatedText');
@@ -432,7 +443,9 @@
             loading.style.display = 'block';
             loadingText.textContent = 'Preparing image...';
             progress.style.display = 'block';
+            progressInfo.style.display = 'block';
             progressBar.style.width = '10%';
+            progressInfo.textContent = 'Preparing image...';
 
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -478,8 +491,6 @@
             img.src = dataUrl;
         }
 
-
-        // No more batch loading needed - everything comes in one call! 🚀
 
         function createMenuItemCard(item, index) {
             const card = document.createElement('div');
@@ -602,77 +613,153 @@
             return card;
         }
 
-        async function processImage(imageSrc) {
-            loading.style.display = 'block';
-            progress.style.display = 'block';
-            results.style.display = 'none';
-
+        async function fetchBatch(imageSrc, batchNumber, retryCount = 0) {
             try {
-                // Single comprehensive Gemini call - gets EVERYTHING at once!
-                loadingText.textContent = 'Analyzing menu and getting all dish details... (one comprehensive call)';
-                progressBar.style.width = '30%';
-
-                const ocrResponse = await fetch('/api/menu', {
+                const response = await fetch('/api/menu', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        image: imageSrc
+                        image: imageSrc,
+                        batch_number: batchNumber
                     })
                 });
 
-                if (!ocrResponse.ok) {
-                    throw new Error('OCR service unavailable');
+                if (!response.ok) {
+                    throw new Error(`Batch ${batchNumber} failed with status ${response.status}`);
                 }
 
-                const ocrResult = await ocrResponse.json();
+                return await response.json();
 
-                // Gemini returns both original and translated text
-                const originalText = ocrResult.original_text || '';
-                const translatedTextFromAPI = ocrResult.translated_text || '';
+            } catch (error) {
+                // Retry once if this is the first failure
+                if (retryCount === 0) {
+                    console.log(`Retrying batch ${batchNumber}...`);
+                    return await fetchBatch(imageSrc, batchNumber, 1);
+                }
+                // After retry fails, throw error to skip this batch
+                throw error;
+            }
+        }
 
-                if (!originalText || !originalText.trim()) {
-                    throw new Error('No text found in image');
+        async function processImage(imageSrc) {
+            loading.style.display = 'block';
+            progress.style.display = 'block';
+            progressInfo.style.display = 'block';
+            results.style.display = 'block';
+
+            const menuItemsSection = document.getElementById('menuItems');
+            const menuItemsContainer = document.getElementById('menuItemsContainer');
+            menuItemsContainer.innerHTML = '';
+
+            extractedText.textContent = '';
+            translatedText.textContent = '';
+
+            let batchNumber = 1;
+            let allMenuItems = [];
+            let allOriginalText = [];
+            let allTranslatedText = [];
+            let totalEstimate = 0;
+            let hasMore = true;
+
+            try {
+                while (hasMore && batchNumber <= 20) {  // Max 20 batches = 40 dishes
+                    // Update progress UI
+                    const dishesLoaded = allMenuItems.length;
+                    const startDish = (batchNumber - 1) * 2 + 1;
+                    const endDish = startDish + 1;
+
+                    if (batchNumber === 1) {
+                        loadingText.textContent = `Analyzing menu (dishes ${startDish}-${endDish})...`;
+                        progressBar.style.width = '10%';
+                        progressInfo.textContent = 'Starting analysis...';
+                    } else {
+                        loadingText.textContent = `Loading dishes ${startDish}-${endDish}...`;
+                        const progressPercent = totalEstimate > 0
+                            ? Math.min(90, (dishesLoaded / totalEstimate) * 100)
+                            : Math.min(90, batchNumber * 10);
+                        progressBar.style.width = progressPercent + '%';
+                        progressInfo.textContent = totalEstimate > 0
+                            ? `Loaded ${dishesLoaded} of ~${totalEstimate} dishes`
+                            : `Loaded ${dishesLoaded} dishes`;
+                    }
+
+                    try {
+                        // Fetch this batch (with retry logic)
+                        const batchResult = await fetchBatch(imageSrc, batchNumber);
+
+                        // Store estimate from first batch
+                        if (batchNumber === 1) {
+                            totalEstimate = batchResult.total_dishes_estimate || 0;
+                        }
+
+                        // Accumulate text
+                        if (batchResult.original_text) {
+                            allOriginalText.push(batchResult.original_text);
+                        }
+                        if (batchResult.translated_text) {
+                            allTranslatedText.push(batchResult.translated_text);
+                        }
+
+                        // Add dishes to collection
+                        if (batchResult.menu_items && batchResult.menu_items.length > 0) {
+                            allMenuItems.push(...batchResult.menu_items);
+
+                            // Display new dishes immediately
+                            batchResult.menu_items.forEach((item) => {
+                                const card = createMenuItemCard(item, allMenuItems.length - 1);
+                                menuItemsContainer.appendChild(card);
+                            });
+
+                            menuItemsSection.style.display = 'block';
+                        }
+
+                        // Update combined text displays
+                        extractedText.textContent = allOriginalText.join('\n\n');
+                        translatedText.textContent = allTranslatedText.join('\n\n');
+
+                        // Check if more batches needed
+                        hasMore = batchResult.has_more !== false;
+
+                        // Show first results immediately
+                        if (batchNumber === 1 && allMenuItems.length > 0) {
+                            results.style.display = 'block';
+                        }
+
+                    } catch (batchError) {
+                        console.error(`Batch ${batchNumber} failed after retry:`, batchError);
+                        // Skip this batch and continue with next
+                        console.log(`Skipping batch ${batchNumber}, continuing...`);
+                    }
+
+                    batchNumber++;
                 }
 
-                loadingText.textContent = 'All details received! Displaying menu...';
-                progressBar.style.width = '90%';
-
-                extractedText.textContent = originalText.trim();
-                translatedText.textContent = translatedTextFromAPI.trim();
-
-                // Display menu items if available
-                const menuItemsSection = document.getElementById('menuItems');
-                const menuItemsContainer = document.getElementById('menuItemsContainer');
-
-                if (ocrResult.menu_items && ocrResult.menu_items.length > 0) {
-                    menuItemsContainer.innerHTML = '';
-
-                    // All details already loaded! Just display them
-                    ocrResult.menu_items.forEach((item, index) => {
-                        const card = createMenuItemCard(item, index);
-                        menuItemsContainer.appendChild(card);
-                    });
-                    menuItemsSection.style.display = 'block';
-                } else {
-                    menuItemsSection.style.display = 'none';
-                }
-
-                loadingText.textContent = 'Complete! Displaying results...';
+                // All batches complete
+                loadingText.textContent = `Complete! All dishes loaded.`;
                 progressBar.style.width = '100%';
+                progressInfo.textContent = `✨ All ${allMenuItems.length} dishes loaded successfully!`;
+
+                if (allMenuItems.length === 0) {
+                    throw new Error('No menu items found in image');
+                }
 
                 setTimeout(() => {
                     loading.style.display = 'none';
                     progress.style.display = 'none';
-                    results.style.display = 'block';
-                }, 500);
+                    progressInfo.style.display = 'none';
+                }, 1500);
 
             } catch (error) {
                 console.error('Error processing image:', error);
                 alert('Error processing image: ' + error.message);
                 loading.style.display = 'none';
                 progress.style.display = 'none';
+                progressInfo.style.display = 'none';
+                if (allMenuItems.length === 0) {
+                    results.style.display = 'none';
+                }
             }
         }
 

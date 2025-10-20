@@ -51,6 +51,13 @@ class handler(BaseHTTPRequestHandler):
 
             print(f"  ✓ API key loaded (length: {len(api_key)} chars)", file=sys.stderr, flush=True)
 
+            # Get batch number for progressive loading (default to batch 1)
+            batch_number = payload.get('batch_number', 1)
+            dishes_per_batch = 2
+            start_dish = (batch_number - 1) * dishes_per_batch + 1
+            end_dish = start_dish + dishes_per_batch - 1
+            print(f"  📦 Processing batch {batch_number} (dishes {start_dish}-{end_dish})...", file=sys.stderr, flush=True)
+
             # Get image data
             print(f"  🖼️  Decoding image data...", file=sys.stderr, flush=True)
             image_data = payload.get('image', '')
@@ -67,17 +74,23 @@ class handler(BaseHTTPRequestHandler):
             target_lang = payload.get('target_lang', 'en')
 
             # Load system prompt from SystemPrompt.txt
-            # TEMPORARY: Currently limited to 2 dishes to stay within Vercel free tier's 10s timeout
-            # TODO: Upgrade to Vercel Pro ($20/mo) for 60s timeout to process all dishes
             system_prompt = load_system_prompt()
 
-            # Combine with JSON structure for one comprehensive API call
+            # Create batch-specific prompt
+            batch_instruction = f"""IMPORTANT: Only analyze dishes {start_dish} to {end_dish} from this menu.
+Skip all dishes before dish {start_dish} and after dish {end_dish}.
+Count dishes from top to bottom, left to right as they appear on the menu.
+If there are fewer than {end_dish} dishes total, return only what exists and set has_more to false."""
+
+            # Combine with JSON structure for batch-specific API call
             prompt = f"""{system_prompt}
+
+{batch_instruction}
 
 Return ONLY valid JSON (no markdown, no code blocks) with this structure:
 {{
-  "original_text": "all Chinese text from the menu, separated by newlines",
-  "translated_text": "full English translation, preserving structure",
+  "original_text": "Chinese text for dishes {start_dish}-{end_dish} only",
+  "translated_text": "English translation for dishes {start_dish}-{end_dish} only",
   "menu_items": [
     {{
       "chinese": "dish name in Chinese characters",
@@ -93,10 +106,12 @@ Return ONLY valid JSON (no markdown, no code blocks) with this structure:
       "regional_origin": "Province or region",
       "dietary_info": ["vegetarian", "halal", etc.]
     }}
-  ]
+  ],
+  "has_more": true or false (are there more dishes after {end_dish}?),
+  "total_dishes_estimate": approximate total number of dishes on entire menu
 }}
 
-Provide ALL requested information for EVERY dish in ONE response. Return valid JSON only."""
+Provide ALL requested information for dishes {start_dish}-{end_dish} ONLY. Return valid JSON only."""
 
             payload_data = {
                 "contents": [{
@@ -179,6 +194,9 @@ Provide ALL requested information for EVERY dish in ONE response. Return valid J
                 'original_text': result_json.get('original_text', ''),
                 'translated_text': result_json.get('translated_text', ''),
                 'menu_items': result_json.get('menu_items', []),
+                'has_more': result_json.get('has_more', False),
+                'total_dishes_estimate': result_json.get('total_dishes_estimate', len(result_json.get('menu_items', []))),
+                'batch_number': batch_number,
                 'detected_lang': 'zh'
             }
 
